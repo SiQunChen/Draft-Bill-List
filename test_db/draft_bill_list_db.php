@@ -96,7 +96,7 @@ function getData($case_number, $match_or_like, $case_manager) {
             'twd' => ['legal' => 0, 'disbs' => 0, 'total' => 0, 'count' => 0],
             'usd' => ['legal' => 0, 'disbs' => 0, 'total' => 0, 'count' => 0],
             'eur' => ['legal' => 0, 'disbs' => 0, 'total' => 0, 'count' => 0],
-            'all_count' => 0
+            'all' => ['legal' => 0, 'disbs' => 0, 'total' => 0, 'count' => 0]
         ];
 
         $processed_rows = [];
@@ -129,7 +129,10 @@ function getData($case_number, $match_or_like, $case_manager) {
                 $totals['twd']['total'] += floatval($row['total']);
                 $totals['twd']['count']++;
             }
-            $totals['all_count']++;
+            $totals['all']['legal'] += floatval($row['legal_services']);
+            $totals['all']['disbs'] += floatval($row['disbs']);
+            $totals['all']['total'] += floatval($row['total']);
+            $totals['all']['count']++;
 
             // 3. 特殊顯示邏輯 (PPP, TDG, BMT, KA, VY)
             if (in_array($row['retainer_num'], ['PPP', 'TDG', 'BMT'])) {
@@ -194,6 +197,7 @@ function getData($case_number, $match_or_like, $case_manager) {
             }
 
             // 8. 格式化數值 (Formatted Strings) 供前端直接顯示
+            // 台幣格式化 (整數)
             $row['fmt_show_legal'] = number_format($row['show_legal_services']);
             $row['fmt_show_disbs'] = number_format($row['show_disbs']);
             $row['fmt_total'] = number_format($row['total']);
@@ -206,6 +210,20 @@ function getData($case_number, $match_or_like, $case_manager) {
             // Retainer 格式化
             $row['fmt_retainer_ntd'] = ($row['retainer_ntd'] > 0) ? number_format($row['retainer_ntd']) : '';
             $row['fmt_retainer_foreign'] = ($row['retainer_foreign'] > 0) ? number_format($row['retainer_foreign'], 2) : '';
+
+            // 總計格式化
+            $totals['twd']['fmt_legal'] = number_format($totals['twd']['legal']);
+            $totals['twd']['fmt_disbs'] = number_format($totals['twd']['disbs']);
+            $totals['twd']['fmt_total'] = number_format($totals['twd']['total']);
+            $totals['usd']['fmt_legal'] = number_format($totals['usd']['legal'], 2);
+            $totals['usd']['fmt_disbs'] = number_format($totals['usd']['disbs'], 2);
+            $totals['usd']['fmt_total'] = number_format($totals['usd']['total'], 2);
+            $totals['eur']['fmt_legal'] = number_format($totals['eur']['legal'], 2);
+            $totals['eur']['fmt_disbs'] = number_format($totals['eur']['disbs'], 2);
+            $totals['eur']['fmt_total'] = number_format($totals['eur']['total'], 2);
+            $totals['all']['fmt_legal'] = number_format($totals['all']['legal']);
+            $totals['all']['fmt_disbs'] = number_format($totals['all']['disbs']);
+            $totals['all']['fmt_total'] = number_format($totals['all']['total']);
 
             $processed_rows[] = $row;
         }

@@ -70,6 +70,7 @@
                 <table class="table hv1-table table-hover  ">
                     <thead>
                         <tr>
+                            <th class="text-center"><input type="checkbox" id="select_all"></th>
                             <th class="text-center">Created</th>
                             <th class="text-center">Case Num</th>
                             <th class="text-center">Manager</th>
@@ -109,17 +110,12 @@
                                 if ($currency_label !== $current_currency_flag) {
                                     // 取得當前幣別的總數
                                     if ($current_currency_flag !== null) {
+                                        $total_legal = $totals[strtolower($current_currency_flag)]['fmt_legal'];
+                                        $total_disbs = $totals[strtolower($current_currency_flag)]['fmt_disbs'];
+                                        $total_total = $totals[strtolower($current_currency_flag)]['fmt_total'];
                                         $total_count = $totals[strtolower($current_currency_flag)]['count'];
-                                        if ($current_currency_flag !== 'TWD') {
-                                            $total_legal = number_format($totals[strtolower($current_currency_flag)]['legal'], 2);
-                                            $total_disbs = number_format($totals[strtolower($current_currency_flag)]['disbs'], 2);
-                                            $total_total = number_format($totals[strtolower($current_currency_flag)]['total'], 2);
-                                        } else {
-                                            $total_legal = number_format($totals[strtolower($current_currency_flag)]['legal']);
-                                            $total_disbs = number_format($totals[strtolower($current_currency_flag)]['disbs']);
-                                            $total_total = number_format($totals[strtolower($current_currency_flag)]['total']);
-                                        }
                                         echo "<tr style='background-color: d1e7dd;'>
+                                                <td></td>
                                                 <td></td>
                                                 <td class='text-left'>Total ({$current_currency_flag})</td>
                                                 <td class='text-right'>{$total_count}</td>
@@ -157,6 +153,7 @@
                                 $ati_class = ($row['show_ati'] == 1) ? '' : 'posthidden';
 
                                 echo "<tr>
+                                        <td class='text-center'><input type='checkbox' name='row_check_box[]' value='{$row['id']}'></td>
                                         <td class='text-left'>{$row['draft_created']}</td>
                                         <td class='text-left'>{$row['case_num']}</td>
                                         <td class='text-left'>{$row['case_manager']}</td>
@@ -178,18 +175,13 @@
 
                             // --- 處理最後一個幣別的小計 ---
                             if ($current_currency_flag != null) {
+                                $total_legal = $totals[strtolower($current_currency_flag)]['fmt_legal'];
+                                $total_disbs = $totals[strtolower($current_currency_flag)]['fmt_disbs'];
+                                $total_total = $totals[strtolower($current_currency_flag)]['fmt_total'];
                                 $total_count = $totals[strtolower($current_currency_flag)]['count'];
-                                if ($current_currency_flag !== 'TWD') {
-                                    $total_legal = number_format($totals[strtolower($current_currency_flag)]['legal'], 2);
-                                    $total_disbs = number_format($totals[strtolower($current_currency_flag)]['disbs'], 2);
-                                    $total_total = number_format($totals[strtolower($current_currency_flag)]['total'], 2);
-                                } else {
-                                    $total_legal = number_format($totals[strtolower($current_currency_flag)]['legal']);
-                                    $total_disbs = number_format($totals[strtolower($current_currency_flag)]['disbs']);
-                                    $total_total = number_format($totals[strtolower($current_currency_flag)]['total']);
-                                }
 
                                 echo "<tr style='background-color: d1e7dd;'>
+                                        <td></td>
                                         <td></td>
                                         <td class='text-left'>Total ({$current_currency_flag})</td>
                                         <td class='text-right'>{$total_count}</td>
@@ -207,32 +199,26 @@
                     </tbody>
 
                     <tfoot>
-                        <!-- <th>
-                        </th>
-                        <th class='text-center'>
-                            小計
-                        </th>
-                        <th>
-                        </th>
-                        <th>
+                        <th></th>
+                        <th></th>
+                        <th class='text-left'>
+                            小計 (TWD)
                         </th>
                         <?php
-                        echo "<th class='text-center'>" . number_format($total_service_amount) . "</th>";
-                        echo "<th class='text-center'>" . number_format($total_disbs_amount) . "</th>";
-                        echo "<th class='text-center'>" . number_format($total_amount) . "</th>";
+                        echo "<th class='text-right'>" . $totals['all']['count'] . "</th>";
                         ?>
-                        <th>
-                        </th>
-                        <th>
-                        </th>
-                        <th>
-                        </th>
-                        <th>
-                        </th>
-                        <th>
-                        </th>
-                        <th>
-                        </th> -->
+                        <th></th>
+                        <?php
+                        echo "<th class='text-right'>" . $totals['all']['fmt_legal'] . "</th>";
+                        echo "<th class='text-right'>" . $totals['all']['fmt_disbs'] . "</th>";
+                        echo "<th class='text-right'>" . $totals['all']['fmt_total'] . "</th>";
+                        ?>
+                        <th></th>
+                        <th></th>
+                        <th></th>
+                        <th></th>
+                        <th></th>
+                        <th></th>
                     </tfoot>
                 </table>
             </div>
@@ -257,6 +243,19 @@
         //Edit SL: more universal
         $(document).on('hidden.bs.modal', function(e) {
             $(e.target).removeData('bs.modal');
+        });
+
+        // 全選/取消全選功能
+        $('#select_all').on('click', function() {
+            var isChecked = $(this).prop('checked');
+            $('input[name="row_check_box[]"]').prop('checked', isChecked);
+        });
+
+        // 當個別複選框狀態改變時，同步更新全選框狀態
+        $(document).on('change', 'input[name="row_check_box[]"]', function() {
+            var totalCheckboxes = $('input[name="row_check_box[]"]').length;
+            var checkedCheckboxes = $('input[name="row_check_box[]"]:checked').length;
+            $('#select_all').prop('checked', totalCheckboxes === checkedCheckboxes);
         });
     </script>
 </body>
