@@ -1,4 +1,4 @@
-<div id="sidebar-wrapper">
+<div id="sidebar-wrapper" class="active">
     <div class="sidebar-nav">
 
         <!-- 搜尋條件內容 -->

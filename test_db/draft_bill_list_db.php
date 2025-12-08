@@ -12,6 +12,23 @@ function getData($case_number, $match_or_like, $case_manager) {
     }
 
     try {
+        // --- A. 新增：權限檢查邏輯 (Reset 按鈕) ---
+        $can_reset = false;
+        $user_ip = $_SERVER['REMOTE_ADDR'];
+
+        // 規則 1: 網段檢查 (192.168.150.x)
+        if (strpos($user_ip, '192.168.150.') === 0) {
+            $can_reset = true;
+        } else {
+            // 規則 2: 資料庫白名單檢查 (permission & 1)
+            // 注意：這裡假設 permission 是整數型態
+            $sql_ip = "SELECT 1 FROM ip_addr WHERE ip_addr = $1 AND (permission & 1) = 1";
+            $res_ip = pg_query_params($dblink, $sql_ip, [$user_ip]);
+            if ($res_ip && pg_num_rows($res_ip) > 0) {
+                $can_reset = true;
+            }
+        }
+
         // --- (保留你原本的 SQL 條件建構邏輯，這部分寫得很好) ---
         $conditions = [];
         $params = [];
@@ -231,7 +248,8 @@ function getData($case_number, $match_or_like, $case_manager) {
         // 回傳資料與總計
         return [
             'rows' => $processed_rows,
-            'totals' => $totals
+            'totals' => $totals,
+            'can_reset' => $can_reset
         ];
     } finally {
         if ($dblink) {
