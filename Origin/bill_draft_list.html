@@ -1,0 +1,1012 @@
+<html lang="en">
+ <head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- The above 3 meta tags *must* come first in the head; any other head content must come *after* these tags -->
+  <link rel="stylesheet" href="../stylesheet/wp.css" type="text/css">
+  <title>Draft Bill List</title>
+
+
+
+<SCRIPT language="javascript">
+<!--
+
+ function openModal() {
+            // 把主頁面的 A, B 值填入隱藏欄位
+//            document.getElementById('hiddenMainA').value = document.getElementById('mainA').value;
+//            document.getElementById('hiddenMainB').value = document.getElementById('mainB').value;
+
+            // 收集所有已勾選的 checkbox
+            let selectedCheckboxes = document.querySelectorAll('input[type="checkbox"]:checked');
+            let hiddenCheckboxContainer = document.getElementById('hiddenCheckboxContainer');
+            hiddenCheckboxContainer.innerHTML = ""; // 清空舊的 hidden input
+
+            selectedCheckboxes.forEach(checkbox => {
+                let hiddenInput = document.createElement("input");
+                hiddenInput.type = "hidden";
+                hiddenInput.name = "deb_nums[]"; // 使用陣列名稱
+                hiddenInput.value = checkbox.name;
+//                hiddenInput.value = checkbox.value;
+                hiddenCheckboxContainer.appendChild(hiddenInput);
+            });
+
+            document.getElementById('promptModal').showModal();
+
+ }
+
+ function closeModal() {
+   document.getElementById('promptModal').close();
+ }
+
+
+
+
+
+
+
+
+function add_ati(types,types3) {
+   whichpost = document.getElementById(types);
+   whichpost3 = document.getElementById(types3);
+
+  if (whichpost.className =='posthidden') {
+     whichpost.className="postshown";
+  } else {
+    if (whichpost3.className =='posthidden') {
+       whichpost3.className="postshown";
+    }
+  }
+}
+
+function del_ati(types,types3,deb_num,id) {
+   whichpost = document.getElementById(types);
+   whichpost3 = document.getElementById(types3);
+
+   var temp = 'ati_cate13_id'+deb_num; 
+   ati_cate13 = document.getElementById(temp);
+   var temp = 'ati_cate23_id'+deb_num; 
+   ati_cate23 = document.getElementById(temp);
+   var temp = 'ati_cate12_id'+deb_num; 
+   ati_cate12 = document.getElementById(temp);
+   var temp = 'ati_cate22_id'+deb_num; 
+   ati_cate22 = document.getElementById(temp);
+   
+   var temp = 'new_matter3_id_'+id; 
+   new_matter3 = document.getElementById(temp);
+   var temp = 'ati_type3_id'+deb_num; 
+   ati_type3=  document.getElementById(temp);
+   var temp = 'new_matter2_id_'+id; 
+   new_matter2 = document.getElementById(temp);
+   var temp = 'ati_type2_id'+deb_num; 
+   ati_type2=  document.getElementById(temp);
+
+  if (whichpost3.className =='postshown') {
+     whichpost3.className="posthidden";
+     ati_cate13[0].selected=true;
+     ati_cate23.options[0]=new Option('','');
+     ati_cate23[0].selected=true;
+     ati_cate23.length=1;
+     new_matter3.checked=false;
+     ati_type3[0].selected=true;
+  } else {
+    if (whichpost.className =='postshown') {
+       whichpost.className="posthidden";
+       ati_cate12[0].selected=true;
+       ati_cate22.options[0]=new Option('','');
+       ati_cate22[0].selected=true;
+       ati_cate22.length=1;
+       new_matter2.checked=false;
+       ati_type2[0].selected=true;
+    }
+  }
+}
+
+
+
+function checkdata ()
+{
+  var ip_addr = '[% addr %]'
+/*
+  if (document.bill.sent_date.value != '' && ip_addr != '192.168.0.135' && ip_addr != '192.168.0.87'  && ip_addr != '192.168.0.175'  && ip_addr != '192.168.0.176')
+     var start_day = document.bill.sent_date.value;
+     var now = new Date();
+     var mon=1+now.getMonth(); 
+     var year=1900+now.getYear();
+ 
+     var today=year+'/'+mon+'/'+now.getDate();
+
+     if ( start_day.length <8)
+     {
+        alert("請輸入正確日期格式，如：2011/07/02 or 2011-07-02 or 20110702");
+        return false;
+     }
+     if (start_day.match(/-/g))
+     {
+        start_day = start_day.replace(/-/g, "\/") ;
+     }
+     if (!start_day.match(/\//g))
+     {
+        start_day = start_day.substring(0,4)+'/'+start_day.substring(4,6)+'/'+start_day.substring(6,8);
+     }  
+
+     var fd1 = new Date(start_day);
+     var fd2 = new Date(today);
+
+     var gap=fd2.getTime()-fd1.getTime();
+     if (Math.floor(gap/(1000*60*60*24))>7 || Math.floor(gap/(1000*60*60*24)) < 0 || isNaN(gap)  ) 
+     {
+        alert('必須在一周內');
+        return false;
+     }   
+  if ( (document.bill.sent_date.value != '' && ip_addr != '192.168.0.135' && ip_addr != '192.168.0.136' && ip_addr != '192.168.0.87'  && ip_addr != '192.168.0.139'  && ip_addr != '192.168.0.140' && ip_addr != '192.168.0.245' && ip_addr != '192.168.0.158' && ip_addr != '192.168.0.159' && ip_addr != '192.168.0.122') && !ip_addr.match(/192.168.150/) )
+*/
+  if ( (document.bill.sent_date.value != '' && ip_addr != '192.168.0.135' && ip_addr != '192.168.0.136' && ip_addr != '192.168.0.87'  && ip_addr != '192.168.0.139'  && ip_addr != '192.168.0.140' && ip_addr != '192.168.0.245' && ip_addr != '192.168.0.158' && ip_addr != '192.168.0.159' && ip_addr != '192.168.0.122')  )
+  { 
+    var start_day = document.bill.sent_date.value;
+    var inpDate = new Date(start_day); 
+    var currDate = new Date(); 
+    if (inpDate.setHours(0, 0, 0, 0) == currDate.setHours(0, 0, 0, 0)) { 
+       return true;
+    } else {
+       alert('必須是當天日期');
+       return false;
+    }
+  } else if ( document.bill.sent_date.value == '' ) {
+    return true;
+  } else {
+     var start_day = document.bill.sent_date.value;
+     var now = new Date();
+     var mon=1+now.getMonth(); 
+     var year=1900+now.getYear();
+ 
+     var today=year+'/'+mon+'/'+now.getDate();
+
+     if ( start_day.length <8)
+     {
+        alert("請輸入正確日期格式，如：2011/07/02 or 2011-07-02 or 20110702");
+        return false;
+     }
+     if (start_day.match(/-/g))
+     {
+        start_day = start_day.replace(/-/g, "\/") ;
+     }
+     if (!start_day.match(/\//g))
+     {
+        start_day = start_day.substring(0,4)+'/'+start_day.substring(4,6)+'/'+start_day.substring(6,8);
+     }  
+
+     var fd1 = new Date(start_day);
+     var fd2 = new Date(today);
+
+     var gap=fd2.getTime()-fd1.getTime();
+     if (Math.floor(gap/(1000*60*60*24))>365 || Math.floor(gap/(1000*60*60*24)) < 0 || isNaN(gap)  ) 
+     {
+        alert('必須在365天內');
+        return false;
+     }   
+  }
+
+
+   
+  if (document.bill.discount.value != '')
+  { 
+     if (document.bill.discount.value>100 || document.bill.discount.value<0 || document.bill.discount.value !=parseInt(document.bill.discount.value)) 
+     {
+        alert("discount value must smaller than 100 and more than 0 and value must integer" );
+        return false;
+//     } else {
+//        return true;
+     }
+//  } else {
+//     return true;
+  }
+/*
+  [% FOREACH row = result %]
+    var checkbox_temp='apply_ckBx '+'[% row.id %]' ;
+    var checkbox_array=document.getElementsByName(checkbox_temp);
+
+    var party_en_name_billing_temp='party_en_name_billing_'+'[% row.id %]' ;
+    var party_en_name_billing_array=document.getElementsByName(party_en_name_billing_temp);
+    var party_en_name_billing=party_en_name_billing_array[0].value;
+    if ( checkbox_array[0].checked && ( /Eastman Chemical/i.test(party_en_name_billing) || /Solutia/i.test(party_en_name_billing) )  ) {
+      if (document.bill.discount.value != '25') {
+        alert('Eastman Chemical OR Solutia 公司必須給予25折扣');
+        return false;
+      } 
+    } 
+  [% END %]  
+*/
+  return true;
+}
+
+/*
+function checkall ()
+{
+   var ch=document.getElementById("check_all");
+       ch.checked=true; 
+}
+function uncheckall ()
+{
+   var ch=document.getElementById("check_all");
+       ch.checked=false; 
+}
+*/
+function checkall2 (checktoggle)
+{
+  var checkboxes = new Array(); 
+//  checkboxes = document[bill].getElementsByTagName('input');
+  checkboxes = document.getElementsByTagName('input');
+  for (var i=0; i<checkboxes.length; i++)  {
+    if (checkboxes[i].type == 'checkbox' && /apply_ckBx/i.test(checkboxes[i].name) )   {
+      checkboxes[i].checked = checktoggle;
+    }
+  }
+}
+
+// ATI Category
+
+ati2=new Array();
+ati1=["","Clearance","Other Special Projects","Trademark Filing","Trademark Filing w/ Priority","Trademark Prosecution","Enforcement and Disputes","Trade Dress","General","Corporate"];
+
+
+ati2[0]=[""];
+ati2[1]=["Knockout Search","Prelim Search","Full Search","Logo Searches","Clearance Investigation & Deep Dive","以下為舊分類","Amazon","AWS","Digital","Media, Advertising & Content Protection (IMDb)","Private Label, Retail & Consumables","Prime"];
+ati2[2]=["Knockout Search","Prelim Search","Full Search","Logo Searches","Clearance Investigation & Deep Dive"];
+
+ati2[3]=["App Filing (Amazon)","App Filing (AWS)","App Filing (Digital)","App Filing (Media, Advertising & Content Protection)","App Filing (Private Label, Retail & Consumables)","App Filing (Prime)"];
+ati2[4]=["App Filing (Amazon)","App Filing (AWS)","App Filing (Digital)","App Filing (Media, Advertising & Content Protection)","App Filing (Private Label, Retail & Consumables)","App Filing (Prime)"];
+ati2[5]=["Office Action","Statement/Declaration of Use/Extensons","Appeal","Publication","Registration","Renewal","Power of Attorney","Co-existence","Recordal","Division","Priority Claim"];
+
+ati2[6]=["Acquisition/Co-existence","Opposition/Invalidation","Litigation","Abuse Complaint","Cancellation","Domain name","Infringement/Policing","Possible Opposition","C&D letter","Misuse","Appeal","Investigation/Analysis","Power of Attorney","以下為舊分類","Co-existence","Watch Notice"];
+
+ati2[7]=["App Filing (Amazon)","App Filing (AWS)","App Filing (Digital)","App Filing (Media, Advertising & Content Protection)","App Filing (Private Label, Retail & Consumables)","App Filing (Prime) "];
+
+ati2[8]=["Amazon","AWS","Clearance Investigation & Deep Dive","Digital","Media, Advertising & Content Protection (IMDb)","Private Label, Retail & Consumables","Prime"];
+ati2[9]=[""];
+
+ati_types=["","C","T"];
+
+// AZN budget report
+// 3,4 => Trademark Filing , 5 => Trademark Procecution , 6=> Enforcement and Disputes
+azn_status=new Array();
+azn_status[0]=[""];
+azn_status[1]=[""];
+azn_status[2]=[""];
+azn_status[3]=["","Filed","Registered","Published","Allowed","Abandoned","Suspended","Acknowledged","Instructed","To Be Filed","Cautionary Notice","Withdrawn","Rejected","Lapsed"];
+azn_status[4]=["","Filed","Registered","Published","Allowed","Abandoned","Suspended","Acknowledged","Instructed","To Be Filed","Cautionary Notice","Withdrawn","Rejected","Lapsed"];
+azn_status[5]=["","Filed","Registered","Published","Allowed","Abandoned","Suspended","Acknowledged","Instructed","To Be Filed","Cautionary Notice","Withdrawn","Rejected","Lapsed"];
+azn_status[6]=["","Resolved","Inactive","Active","Monitoring"];
+azn_status[7]=[""];
+azn_status[8]=[""];
+azn_status[9]=[""];
+
+
+
+//ATI
+
+function process_ati (state,postid) { 
+  postid=postid*2+1;
+  for (i=0;i<=postid;i++) { 
+     types='ATI'+i;
+     whichpost = document.getElementById(types);
+     if ( state =="hide") {
+        whichpost.className="posthidden";
+     } else {
+        whichpost.className="postshowntd";
+     }
+  }
+}
+
+function renew_ati(index,id_name,id_name2) {
+  var ati_s=document.getElementById(id_name);
+  for(var i=0;i<ati2[index].length;i++) 
+    ati_s.options[i]= new Option(ati2[index][i],ati2[index][i]); 
+//    document.bill.ati_cate2.options[i]=new Option(ati2[index][i], ati2[index][i]);
+
+  ati_s.length=ati2[index].length;
+//  document.bill.ati_cate2.length=ati2[index].length;
+
+  for (var i=0;i<azn_status[index].length;i++)
+    document.getElementById(id_name2).options[i]=new Option(azn_status[index][i], azn_status[index][i]);
+  document.getElementById(id_name2).length=azn_status[index].length;
+
+
+}
+-->
+</SCRIPT>
+
+<style  type="text/css"> 
+//input.largerCheckbox { 
+//  -ms-transform: scale(1.5); /* IE */
+//  -moz-transform: scale(1.5); /* FireFox */
+//  -webkit-transform: scale(1.5); /* Safari and Chrome */
+//  -o-transform: scale(1.5); /* Opera */
+//            width: 40px; 
+//            height: 40px; 
+
+   dialog { padding: 40px; border: none; border-radius: 8px; box-shadow: 0px 4px 6px rgba(0,0,0,0.1); }
+   .modal-content { display: flex; flex-direction: column; gap: 10px; }
+  } 
+ </style> 
+
+ </head>
+<!--
+ <body  data-spy="scroll" data-target=".amanda-nav" onload="load_ati()">
+-->
+ <body onload="load_ati()">
+  
+
+<SCRIPT LANGUAGE="javascript">
+window.onload = function () {
+  load_ati();
+}
+
+function load_ati() {
+  [% FOREACH row = result %]
+   [% IF row.show_ati ==1 %]
+// ATI1
+    var ati_id1='ati_cate1_id'+'[% row.deb_num %]' ;
+    var ati_id2='ati_cate2_id'+'[% row.deb_num %]' ;
+//    var ati_ty='ati_type_id'+'[% row.deb_num %]' ;
+    var ati_s1=document.getElementById(ati_id1);
+    var ati_s2=document.getElementById(ati_id2);
+//    var ati_sty=document.getElementById(ati_ty);
+    for (i=0;i<ati1.length;i++) { 
+      if (ati1[i] == '[% row.ati_cate1 %]' ) {
+        ati_s1.options[i].selected=true;
+        for (var j=0;j<ati2[i].length;j++) {
+          ati_s2.options[j]=new Option(ati2[i][j], ati2[i][j]);
+          if (ati2[i][j] == '[% row.ati_cate2 %]') {
+            ati_s2.options[j].selected=true;
+          }
+        }
+        ati_s2.length=ati2[i].length;
+      }
+    }
+//    for (i=0;i<ati_types.length;i++) { 
+//      if ( ati_types[i] =='[%row.ati_type%]' ) {
+//        ati_sty.options[i].selected=true; 
+//      } 
+//    }
+
+// ATI12
+    var ati_id12='ati_cate12_id'+'[% row.deb_num %]' ;
+    var ati_id22='ati_cate22_id'+'[% row.deb_num %]' ;
+//    var ati_ty2='ati_type2_id'+'[% row.deb_num %]' ;
+    var ati_s12=document.getElementById(ati_id12);
+    var ati_s22=document.getElementById(ati_id22);
+//    var ati_sty2=document.getElementById(ati_ty2);
+    for (i=0;i<ati1.length;i++) { 
+      if (ati1[i] == '[% row.ati_cate12 %]' ) {
+        ati_s12.options[i].selected=true;
+        for (var j=0;j<ati2[i].length;j++) {
+          ati_s22.options[j]=new Option(ati2[i][j], ati2[i][j]);
+          if (ati2[i][j] == '[% row.ati_cate22 %]') {
+            ati_s22.options[j].selected=true;
+          }
+        }
+        ati_s22.length=ati2[i].length;
+      }
+    }
+//    for (i=0;i<ati_types.length;i++) { 
+//      if ( ati_types[i] =='[%row.ati_type2%]' ) {
+//        ati_sty2.options[i].selected=true; 
+//      } 
+//    }
+
+// ATI13
+    var ati_id13='ati_cate13_id'+'[% row.deb_num %]' ;
+    var ati_id23='ati_cate23_id'+'[% row.deb_num %]' ;
+//    var ati_ty3='ati_type3_id'+'[% row.deb_num %]' ;
+    var ati_s13=document.getElementById(ati_id13);
+    var ati_s23=document.getElementById(ati_id23);
+//    var ati_sty3=document.getElementById(ati_ty3);
+    for (i=0;i<ati1.length;i++) { 
+      if (ati1[i] == '[% row.ati_cate13 %]' ) {
+        ati_s13.options[i].selected=true;
+        for (var j=0;j<ati2[i].length;j++) {
+          ati_s23.options[j]=new Option(ati2[i][j], ati2[i][j]);
+          if (ati2[i][j] == '[% row.ati_cate23 %]') {
+            ati_s23.options[j].selected=true;
+          }
+        }
+        ati_s23.length=ati2[i].length;
+      }
+    }
+//    for (i=0;i<ati_types.length;i++) { 
+//      if ( ati_types[i] =='[%row.ati_type3%]' ) {
+//        ati_sty3.options[i].selected=true; 
+//      } 
+//    }
+
+   [% END %]
+  [% END %]
+}
+
+
+
+</SCRIPT>
+
+<style type="text/css">
+.posthidden {display:none}
+.postshowntd {display:table-cell}
+</style>
+
+
+
+<h1>Draft Bill List</h1>
+
+<form name="bill" method='post' action='../cgi-bin/bill_draft_list.pl' onsubmit='return checkdata()'>
+<p>
+Apply Sent Date: <input type="text" name="sent_date">
+<p>
+Apply Discount: <input type="text" name="discount" value="">
+<p>
+[% IF in_manager =='MD' || in_manager =='SE' || in_manager =='PD'  || in_manager =='GK'  || in_manager =='VY'  || in_manager =='KA' || in_manager =='BC'%]
+  OC Invoice: Expected <input TYPE="checkbox" NAME="invoice_exp_status" value="1"> Cancel  <input TYPE="checkbox" NAME="invoice_exp_status" value="2">
+[% END %]
+[% IF in_manager =='MD' || in_manager =='SE' || in_manager =='PD'  || in_manager =='GK' || in_manager =='BC' %]
+<BR>
+  PPP OC : Expected <input TYPE="checkbox" NAME="pppoc_add" value="1"> Cancel <input TYPE="checkbox" NAME="pppoc_cancel" value="1"> 
+[% END %]
+<p>
+<input type=submit name="bill_list_submit" value="Update and Save">
+<input type=submit name="bill_list_submit" value="Apply Sent Date">
+<button type="button" onclick="openModal()">申請開立收據</button>
+
+<input type=hidden name="in_manager" value="[% in_manager  %]">
+<input type=hidden name="in_case_num_dir" value="[% in_case_num_dir  %]">
+<p>
+<input type="button" name="CheckAll" value="Check All" onClick="checkall2(true)">
+&nbsp;&nbsp;
+<input type="button" name="UnCheckAll" value="UnCheck All" onClick="checkall2(false)">
+<P>
+<input type="button" name="showati" value="Show ATI" onClick="process_ati('show',[% total_count %])">
+&nbsp;&nbsp;
+<input type="button" name="hiddenati" value="Hide ATI" onClick="process_ati('hide',[% total_count %])">
+<P>
+<table width='100%' cellpadding='4'><thead>
+<tr>
+[% IF in_manager =='MD' OR  in_manager =='SE' OR in_manager =='BC' %]
+<td>
+ SN 
+</td>
+
+[% END %]
+<td>
+</td>
+<P>
+<!--
+<td style="width:50px" class="nav"> <a href="../cgi-bin/bill_draft_list.pl?bill_list_submit=sort_bills&time=[% time_cache %]&sort_key=id&case_num=[% in_case_num_dir %]&case_manager=[% in_manager %]">Bill ID</td>
+-->
+<td style="width:80px" class="nav"> <a href="../cgi-bin/bill_draft_list.pl?bill_list_submit=sort_bills&time=[% time_cache %]&sort_key=draft_created&case_num=[% in_case_num_dir %]&case_manager=[% in_manager %]">Created</td>
+
+<td style="width:80px" class="nav"><a href="../cgi-bin/bill_draft_list.pl?bill_list_submit=sort_bills&time=[% time_cache %]&sort_key=case_num&case_num=[% in_case_num_dir %]&case_manager=[% in_manager %]">Case Num</td>
+<td > <a href="../cgi-bin/bill_draft_list.pl?bill_list_submit=sort_bills&time=[% time_cache %]&sort_key=case_manager&case_num=[% in_case_num_dir %]&case_manager=[% in_manager %]">Manager</td>
+<td width="100px"><a href="../cgi-bin/bill_draft_list.pl?bill_list_submit=sort_bills&time=[% time_cache %]&sort_key=deb_num&case_num=[% in_case_num_dir %]&case_manager=[% in_manager %]">Debit Note</a></td>
+
+<td ><a href="../cgi-bin/bill_draft_list.pl?bill_list_submit=sort_bills&time=[% time_cache %]&sort_key=legal_services&case_num=[% in_case_num_dir %]&case_manager=[% in_manager %]">Legal Services</a></td>
+
+<td ><a href="../cgi-bin/bill_draft_list.pl?bill_list_submit=sort_bills&time=[% time_cache %]&sort_key=disbs&case_num=[% in_case_num_dir %]&case_manager=[% in_manager %]">Disbs</a></td>
+
+
+<td tyle="width:120px"<a href="../cgi-bin/bill_draft_list.pl?bill_list_submit=sort_bills&time=[% time_cache %]&sort_key=total&case_num=[% in_case_num_dir %]&case_manager=[% in_manager %]">Total</a></td>
+<td >Edit</td>
+<!--
+<td >Update</td>
+<td >Add Disb.</td>
+<td style="width:100px">Billing Email</td>
+-->
+<td >Billing Note</td>
+<td class="[%ati_show_status%]" id="ATI0" >OC Invoice</td>
+<td class="[%ati_show_status%]" id="ATI1" >ATI Category</td>
+<td >Retainer</td>
+<td >Reset</td>
+</tr>
+</thead><tbody>
+[% i=1 %]
+[% sn=1 %]
+[% show_currency =1 %]
+[% FOREACH row = result %]
+  [% IF show_currency !=1 && (  ( show_currency =='TWD' && ( row.billing_currency== 'English (USD)' ||  row.billing_currency == 'English (EUR)') || ( show_currency =='USD' &&  row.billing_currency == 'English (EUR)')  ) )  %]
+    <tr bgcolor='#CFECEC' align='right'>
+     [% IF in_manager =='MD' OR in_manager =='SE' OR in_manager =='BC' %]
+      <td>
+      </td>
+     [% END %]
+      <td > 
+       Total
+      </td> 
+      <td > 
+       [% IF row.billing_currency == 'English (USD)'  %]
+         [% total_count_twd %]
+       [% ELSIF  row.billing_currency == 'English (EUR)' %]
+         [% IF  show_currency =='TWD' %] 
+           [% total_count_twd %]
+         [% ELSE %]
+           [% total_count_usd %]
+         [% END %]
+       [% END %]
+      </td> 
+      <td  > 
+      </td> 
+      <td  > 
+      </td> 
+      <td > 
+      </td> 
+      <td > 
+       [% IF row.billing_currency == 'English (USD)'  %]
+         TWD [% total_legal_twd %]
+       [% ELSIF  row.billing_currency == 'English (EUR)' %]
+         [% IF  show_currency =='TWD' %] 
+           TWD [% total_legal_twd %] 
+         [% ELSE %]
+           USD [% total_legal_usd %]
+         [% END %]
+       [% END %]
+      </td> 
+      <td > 
+       [% IF row.billing_currency == 'English (USD)'  %]
+         TWD [% total_disbursement_twd %]
+       [% ELSIF  row.billing_currency == 'English (EUR)' %]
+         [% IF  show_currency =='TWD' %]
+           TWD [% total_disbursement_twd %]
+         [% ELSE %]
+           USD [% total_disbursement_usd %]
+         [% END %]
+         
+       [% END %]
+      </td> 
+      <td > 
+       [% IF row.billing_currency == 'English (USD)'  %]
+         TWD[% total_twd %]
+       [% ELSIF  row.billing_currency == 'English (EUR)' %]
+         [% IF  show_currency =='TWD' %]
+           TWD[% total_twd %]
+         [% ELSE %]
+           USD [% total_usd %]
+         [% END %]
+       [% END %]
+      </td> 
+      <td colspan='6' > 
+      </td> 
+    </tr>
+  [% END %]
+
+  [% IF row.billing_currency != 'English (USD)' && row.billing_currency != 'English (EUR)' && show_currency == 1 %]
+    <th colspan="15" bgcolor='yellow'>
+     <H5>TWD</H5>
+    </th> 
+    [% show_currency = 'TWD' %]
+  [% END %]
+   
+  [% IF row.billing_currency == 'English (USD)' && show_currency != 'USD' && row.currency_flag ==1 %]
+    <th colspan="15" bgcolor='yellow'>
+     <H5>USD</H5>
+    </th> 
+    [% show_currency = 'USD' %]
+  [% END %]
+
+  [% IF row.billing_currency == 'English (EUR)' && show_currency != 'EUR' && row.currency_flag ==1 %]
+    <th colspan="15" bgcolor='yellow'>
+     <H5>EUR</H5>
+    </th> 
+    [% show_currency = 'EUR' %]
+  [% END %]
+
+  [%IF  row.even == 0 %]
+    <tr bgcolor="#FAEBD7" >
+
+   [% ELSE %]
+    <tr bgcolor="#D3D3D3">
+
+   [% END %]
+
+[% IF in_manager =='MD' OR in_manager =='SE' OR in_manager =='BC' %]
+<td>
+ [% sn %]
+ [% sn= sn +1 %]  
+</td>
+[% END %]
+<td>
+<input type="checkbox" name="apply_ckBx [% row.id %]" id="check_all" value="yes">
+<input type="hidden" name="party_en_name_billing_[% row.id %]" value="[% row.party_en_name_billing  %]">
+</td>
+
+<!--
+<td >
+<a href="/cgi-bin/bill_mod.pl?id=[% row.id %]&deb_num=[% row.deb_num %]&in_case_num_dir=[% in_case_num_dir %]&in_manager=[% in_manager %]">[% row.id %]</a>
+</td>
+-->
+<td >[% row.draft_created  %]</td>
+<td >[% row.case_num %]</td>
+<td >[% row.case_manager %]</td>
+<td ><a href="/cgi-bin/bill_mod.pl?id=[% row.id %]&deb_num=[% row.deb_num %]&in_case_num_dir=[% in_case_num_dir %]&in_manager=[% in_manager %]">[% row.deb_num %]</a>
+[% IF row.pppoc_status %]
+   <BR>
+    <font color="RED" size="1">
+     <B>
+      PPP OC 
+     </B>
+    </font>
+[% END %]
+
+</td>
+<td  align=right>
+  [% IF row.billing_currency == 'English (USD)' && row.currency_flag ==1  %]
+    [% row.currency2 %] 
+    [% row.foreign_legal2 %] 
+    [% IF row.show_foreign_legal_services >0  %] ([% row.show_foreign_legal_services %]) [% END %] 
+  [% ELSIF row.billing_currency == 'English (EUR)' && row.currency_flag ==1  %]
+    [% row.currency2 %] 
+    [% row.foreign_legal2 %] 
+    [% IF row.show_foreign_legal_services >0  %] ([% row.show_foreign_legal_services %]) [% END %] 
+  [% ELSE %]
+    [% row.legal_services %] 
+    [% IF row.show_legal_service %] ([% row.show_legal_service %]) [% END %] 
+  [% END %]
+  [% IF  row.discount >0 %]
+    (discounted [% row.discount %] perc.)
+  [% END %]
+</td>
+<!--
+<BR>
+ row.currency2   row.foreign_legal2    IF row.show_foreign_legal_services >0  ( row.show_foreign_legal_services ) END 
+-->
+
+<td  align="right" NOWRAP>
+  [% IF row.billing_currency == 'English (USD)' && row.currency_flag ==1 %]
+    [% row.currency2 %] 
+    [% row.foreign_disbs2 %] 
+    [% IF row.show_foreign_disbs > 0 %] ([% row.show_foreign_disbs %]) [% END %]
+  [% ELSIF row.billing_currency == 'English (EUR)' && row.currency_flag ==1 %]
+    [% row.currency2 %] 
+    [% row.foreign_disbs2 %] 
+    [% IF row.show_foreign_disbs > 0 %] ([% row.show_foreign_disbs %]) [% END %]
+  [% ELSE %]
+    [% row.disbs %] 
+    [% IF row.show_disbs %] ([% row.show_disbs %]) [% END %]
+  [% END %]
+[% IF row.display_oc_status %]
+   <BR>
+    <font color="RED" size="1">
+     <B>
+  [% row.display_oc_status %]
+     </B>
+    </font>
+[% END %]
+</td>
+<!--
+<BR>
+ row.currency2   row.foreign_disbs2   IF row.show_foreign_disbs >0  ( row.show_foreign_disbs )  END
+ --> 
+
+
+  [% IF row.billing_currency == 'English (USD)' && row.currency_flag ==1 %]
+    <td align="right" NOWRAP>[% row.currency2 %] [% row.foreign_total2 %]</td> 
+  [% ELSIF row.billing_currency == 'English (EUR)' && row.currency_flag ==1 %]
+    <td align="right" NOWRAP>[% row.currency2 %] [% row.foreign_total2 %]</td> 
+  [% ELSE %]
+    <td  align="right" NOWRAP>[% row.total %]</td> 
+  [% END %]
+
+
+<td ><a href="../cgi-bin/bill_edit.pl?deb_num=[% row.deb_num %]&in_manager=[% in_manager  %]&in_case_num_dir=[% in_case_num_dir %]">Update</a>
+<!-- </td>
+<td >-->
+<P>
+<a href="../cgi-bin/disb_new.pl?deb_num=[% row.deb_num %]&initials=&disb_submit=add_late&in_manager=[% in_manager  %]&in_case_num_dir=[% in_case_num_dir %]">Add Disbursements</a></td>
+<!--
+<td >[% row.billing_person_email %]</td>
+-->
+<td >[% row.billing_note %]</td>
+
+<!-- ATI -->
+[% i=i+1 %]
+<td class="[%ati_show_status%]" id="ATI[% i %]" >
+[% IF row.show_oc ==1 %]
+  <input TYPE="checkbox" NAME="invoice_exp_status_[%row.id%]" value="1">Expected 
+  <BR>
+  <input TYPE="checkbox" NAME="invoice_exp_status_[%row.id%]" value="2">Cancel
+[% END %]
+</td>
+
+[% IF row.show_ati ==1 %]
+[% i=i+1 %]
+<td class="[%ati_show_status%]" id="ATI[% i %]">
+<B> New MVE:</B> <input TYPE="checkbox"  class="largerCheckbox" NAME="new_matter_[%row.id%]" value="1" [% IF row.new_matter  %] checked[% END %]> 
+ <BR> 
+ Project Owner: <input type="text" name="project_owner_[%row.id%]" value="[% row.project_owner %]">
+ <BR>
+ Class(es):<input type="text" name="class_count_[%row.id%]" value="[% row.class_count %]">
+ <BR>
+ <input type="button" id="btn" value="＋" onclick="add_ati('showati12_[%row.deb_num%]','showati13_[%row.deb_num%]')"/>
+ <input type="button" id="btn" value="－" onclick="del_ati('showati12_[%row.deb_num%]','showati13_[%row.deb_num%]','[% row.deb_num %]','[% row.id %]')"/>
+ <BR>
+
+ <table>
+  <tr>
+   <td style="Afont-face: Arial;font-size: 100%">
+    1st:
+    <select size=1 name="ati_cate1_[% row.id %]" id="ati_cate1_id[% row.deb_num %]" onChange="renew_ati(this.selectedIndex,'ati_cate2_id[% row.deb_num %]','azn_budget_status[% row.deb_num %]');">
+     <option value=""></option>
+     <option value="Clearance">Clearance</option>
+     <option value="Other Special Projects">Other Special Projects</option>
+     <option value="Trademark Filing">Trademark Filing</option>
+     <option  value="Trademark Filing w/ Priority">Trademark Filing w/ Priority
+     <option value="Trademark Prosecution">Trademark Prosecution</option>
+     <option value="Enforcement and Disputes">Enforcement and Disputes</option>
+     <option value="Trade Dress">Trade Dress
+     <option value="General">General</option>
+     <option value="Corporate">Corporate</option>
+    </select>
+    <BR>
+    2nd:
+    <select size=1 name="ati_cate2_[% row.id %]" id="ati_cate2_id[% row.deb_num %]" >
+     <option  value="">
+    </select>
+<!--
+    <BR>
+    Type:
+    <select size=1 name="ati_type_[% row.id %]" id="ati_type_id[% row.deb_num %]">
+     <option value=""></option>
+     <option value="C">Class</option>
+     <option value="T">TM(Case)</option>
+    </select>
+-->
+    <BR>
+    [% azn_trademark_status = [ "","Filed","Registered","Published","Allowed","Abandoned","Suspended","Acknowledged","Instructed","To Be Filed","Cautionary Notice","Withdrawn","Rejected","Lapsed"] %]
+    [% azn_disputes_status = [ "","Resolved","Inactive","Active","Monitoring"]  %]
+
+    Status:
+    <select name="azn_budget_status_[%row.id%]" id="azn_budget_status[% row.deb_num %]">
+    [% IF row.ati_cate1 == "Trademark Filing" || row.ati_cate1 == "Trademark Filing w/ Priority" || row.ati_cate1 == "Trademark Prosecution" %] 
+      [% FOREACH variable IN  azn_trademark_status %]
+       [% IF variable == row.azn_budget_status %]
+          <option value="[% variable %]" selected>[% variable %]</option>
+       [% ELSE %]
+          <option value="[% variable %]">[% variable %]</option>
+       [% END %]
+      [% END %]
+    [% ELSIF row.ati_cate1 == "Enforcement and Disputes"  %] 
+      [% FOREACH variable IN  azn_disputes_status %]
+        [% IF variable == row.azn_budget_status %]
+          <option value="[% variable %]" selected>[% variable %]</option>
+        [% ELSE %]
+          <option value="[% variable %]">[% variable %]</option>
+        [% END %]
+      [% END %]
+    [% END %]
+    </select>
+   </td>
+  </tr>
+
+ [% IF row.ati_cate12 !=''  %]
+  <tr class="postshown" id="showati12_[%row.deb_num%]">
+ [% ELSE %]
+  <tr class="posthidden" id="showati12_[%row.deb_num%]">
+ [% END %]
+   <td style="Afont-face: Arial;font-size: 100%">
+    1st:
+    <select size=1 name="ati_cate12_[% row.id %]" id="ati_cate12_id[% row.deb_num %]" onChange="renew_ati(this.selectedIndex,'ati_cate22_id[% row.deb_num %]');">
+     <option value=""></option>
+     <option value="Clearance">Clearance</option>
+     <option value="Other Special Projects">Other Special Projects</option>
+     <option value="Trademark Filing">Trademark Filing</option>
+     <option  value="Trademark Filing w/ Priority">Trademark Filing w/ Priority
+     <option value="Trademark Prosecution">Trademark Prosecution</option>
+     <option value="Enforcement and Disputes">Enforcement and Disputes</option>
+     <option value="Trade Dress">Trade Dress
+     <option value="General">General</option>
+     <option value="Corporate">Corporate</option>
+    </select>
+    <BR>
+    2st:
+    <select size=1 name="ati_cate22_[% row.id %]" id="ati_cate22_id[% row.deb_num %]" >
+     <option  value="">
+    </select>
+    <BR>
+<!--
+    Type:
+    <select size=1 name="ati_type2_[% row.id %]" id="ati_type2_id[% row.deb_num %]">
+     <option value=""></option>
+     <option value="C">Class</option>
+     <option value="T">TM</option>
+    </select>
+-->
+    New MVE: <input TYPE="checkbox" NAME="new_matter2_[%row.id%]" id="new_matter2_id_[%row.id%]" value="1" [% IF row.new_matter2  %] checked[% END %]> 
+   </td>
+  </tr>
+
+ [% IF row.ati_cate13 !=''  %]
+  <tr class="postshown" id="showati13_[%row.deb_num%]">
+ [% ELSE %]
+  <tr class="posthidden" id="showati13_[%row.deb_num%]">
+ [% END %]
+   <td style="Afont-face: Arial;font-size: 100%">
+    1st:
+    <select size=1 name="ati_cate13_[% row.id %]" id="ati_cate13_id[% row.deb_num %]" onChange="renew_ati(this.selectedIndex,'ati_cate23_id[% row.deb_num %]');">
+     <option value=""></option>
+     <option value="Clearance">Clearance</option>
+     <option value="Other Special Projects">Other Special Projects</option>
+     <option value="Trademark Filing">Trademark Filing</option>
+     <option  value="Trademark Filing w/ Priority">Trademark Filing w/ Priority
+     <option value="Trademark Prosecution">Trademark Prosecution</option>
+     <option value="Enforcement and Disputes">Enforcement and Disputes</option>
+     <option value="Trade Dress">Trade Dress
+     <option value="General">General</option>
+     <option value="Corporate">Corporate</option>
+    </select>
+    <BR>
+    2st:
+    <select size=1 name="ati_cate23_[% row.id %]" id="ati_cate23_id[% row.deb_num %]" >
+     <option  value="">
+    </select>
+    <BR>
+<!--
+    Type:
+    <select size=1 name="ati_type3_[% row.id %]" id="ati_type3_id[% row.deb_num %]">
+     <option value=""></option>
+     <option value="C">Class</option>
+     <option value="T">TM</option>
+    </select>
+-->
+    New MVE: <input TYPE="checkbox" NAME="new_matter3_[%row.id%]" id="new_matter3_id_[%row.id%]"  value="1" [% IF row.new_matter3  %] checked[% END %]> 
+   </td>
+  </tr>
+
+<!-- Display total -->
+
+
+
+
+ </table>
+ 
+ [% ELSE %]
+<td>
+ [% END %]
+</td>
+<td >
+ [% row.retainer_case_num %]<BR>
+ [% IF row.billing_currency != 'English (USD)' &&  row.billing_currency != 'English (EUR)' %] 
+   TWD [% row.retainer_ntd %]  
+ [% ELSE %]
+   [% row.retainer_foreign_currency %]  [% row.retainer_foreign %]  
+ [% END %]
+ 
+ [% IF row.retainer_ntd >0 || row.retainer_foreign > 0 %] 
+   <BR><BR>Minus retainer
+   [% IF row.retainer_amount =='' %]
+     <input type="text" name="retainer_amount_[%row.id%]" value="0" size="10">
+   [% ELSE %]
+     <input type="text" name="retainer_amount_[%row.id%]" value="[% row.retainer_amount %]" size="10">
+   [% END %]
+ [% END %]
+
+</td>
+<td >
+ [% IF ip_addr.$addr == 1 || addr.match('192.168.150')  %]
+  <a href="../cgi-bin/draft_reset.pl?deb_num=[% row.deb_num %]">Reset</a>
+ [% END %] 
+</td>
+
+
+</tr>
+[% END %]
+
+  [% IF show_currency !=1  %]
+    <tr bgcolor='#CFECEC' align='right'>
+     [% IF in_manager =='MD' OR in_manager =='SE' OR in_manager =='BC' %]
+      <td>
+      </td>
+     [% END %]
+      <td > 
+       Total
+      </td> 
+      <td > 
+       [% IF row.billing_currency == 'English (USD)'  %]
+         [% total_count_usd %]
+       [% ELSIF  row.billing_currency == 'English (EUR)' %]
+         [% total_count_eur %]
+       [% ELSE %]
+         [% total_count_twd %]
+       [% END %]
+      </td> 
+      <td  > 
+      </td> 
+      <td  > 
+      </td> 
+      <td > 
+      </td> 
+      <td > 
+       [% IF row.billing_currency == 'English (USD)'  %]
+         USD [% total_legal_usd %]
+       [% ELSIF  row.billing_currency == 'English (EUR)' %]
+         EUR [% total_legal_eur %]
+       [% ELSE %]
+         TWD [% total_legal_twd %]
+       [% END %]
+      </td> 
+      <td > 
+       [% IF row.billing_currency == 'English (USD)'  %]
+         USD [% total_disbursement_usd %]
+       [% ELSIF  row.billing_currency == 'English (EUR)' %]
+         EUR [% total_disbursement_eur %]
+       [% ELSE %]
+         TWD [% total_disbursement_twd %]
+       [% END %]
+      </td> 
+      <td > 
+       [% IF row.billing_currency == 'English (USD)'  %]
+         USD [% total_usd %]
+       [% ELSIF  row.billing_currency == 'English (EUR)' %]
+         EUR [% total_eur %]
+       [% ELSE %]
+         TWD [% total_twd %]
+       [% END %]
+      </td> 
+      <td colspan='6' > 
+      </td> 
+    </tr>
+  [% END %]
+
+<tr bgcolor='yellow' align='right'>
+<!-- <td colspan='2' > -->
+[% IF in_manager =='MD' OR in_manager =='SE' OR in_manager =='BC' %]
+<td>
+</td>
+[% END %]
+ <td > 
+  Total
+ </td> 
+ <td > 
+  [% total_count %]
+ </td> 
+ <td  > 
+ </td> 
+ <td  > 
+ </td> 
+ <td > 
+ </td> 
+ <td > 
+  TWD [% total_legal %]
+ </td> 
+ <td > 
+  TWD [% total_disbursement %]
+ </td> 
+ <td > 
+  TWD [% total_ntd %]
+ </td> 
+ <td colspan='6' > 
+<!-- <td colspan='4' > -->
+ </td> 
+</tr>
+
+</tbody>
+</table>
+
+</form>
+
+
+    <!-- Modal 彈出視窗 -->
+    <dialog id="promptModal">
+        <h3>申請大藍收據</h3>
+        <form id="modalForm" method="POST" action="http://192.168.0.75/receipt_sec/receipt_email.php">
+            <!-- 隱藏欄位存放主頁面的 A/B 
+            <input type="hidden" id="hiddenMainA" name="mainA">
+            <input type="hidden" id="hiddenMainB" name="mainB">
+-->
+            <!-- 隱藏欄位存放已勾選的 checkbox -->
+            <div id="hiddenCheckboxContainer"></div>
+
+            <label>Initials&nbsp;</label><input type="text" id="initials" name="initials" required><br>
+            <label>Note&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</label><textarea name="notes" id="notes" cols=60, rows=5></textarea><br>
+            <button type="submit">送出</button>
+            <button type="button" onclick="closeModal()">取消</button>
+        </form>
+    </dialog>
+
+
+</body>
+</html>

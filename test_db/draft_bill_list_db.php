@@ -1,0 +1,223 @@
+<?php
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+require_once("db.ini");
+
+function getData($case_number, $match_or_like, $case_manager) {
+    // 1. 資料庫連接
+    $dblink = @pg_connect(DB_CONNECT);
+    if (!$dblink) {
+        throw new Exception("無法連接到資料庫");
+    }
+
+    try {
+        // --- (保留你原本的 SQL 條件建構邏輯，這部分寫得很好) ---
+        $conditions = [];
+        $params = [];
+        $param_index = 1;
+
+        // 處理 case_number
+        if ($case_number !== '') {
+            $values = array_filter(array_map(function ($val) {
+                return strtoupper(trim($val));
+            }, explode(',', $case_number)));
+            if (!empty($values)) {
+                if ($match_or_like === 'match') {
+                    $in_placeholders = [];
+                    foreach ($values as $val) {
+                        $in_placeholders[] = "$" . $param_index;
+                        $params[] = $val;
+                        $param_index++;
+                    }
+                    $conditions[] = "bills.case_num IN (" . implode(', ', $in_placeholders) . ")";
+                } elseif ($match_or_like === 'like') {
+                    $or_conditions = [];
+                    foreach ($values as $val) {
+                        $or_conditions[] = "bills.case_num LIKE $" . $param_index;
+                        $params[] = $val . '%';
+                        $param_index++;
+                    }
+                    $conditions[] = "(" . implode(' OR ', $or_conditions) . ")";
+                }
+            }
+        }
+
+        // 處理 case_manager
+        if ($case_manager !== '') {
+            $values = array_filter(array_map(function ($val) {
+                return strtoupper(trim($val));
+            }, explode(',', $case_manager)));
+            if (!empty($values)) {
+                $in_placeholders = [];
+                foreach ($values as $val) {
+                    $in_placeholders[] = "$" . $param_index;
+                    $params[] = $val;
+                    $param_index++;
+                }
+                $conditions[] = "(cases.case_manager IN (" . implode(', ', $in_placeholders) . ") OR bills.bills_case_manager IN (" . implode(', ', $in_placeholders) . "))";
+            }
+        }
+
+        // 組合 SQL
+        $where_clause = (count($conditions) > 0) ? implode(' AND ', $conditions) : '1=1';
+
+        $sql = "SELECT 
+                bills.*, 
+                cases.case_manager, 
+                cases.case_num, 
+                cases.billing_note, 
+                cases.retainer_num, 
+                cases.pppoc_status, 
+                cases.retainer_case_num, 
+                cases.retainer_foreign, 
+                cases.retainer_foreign_currency, 
+                cases.retainer_ntd, 
+                cases.party_en_name_billing, 
+                (CASE WHEN bills.draft_created >= '2022-11-26' THEN 1 ELSE 0 END) AS currency_flag
+            FROM bills 
+            LEFT JOIN cases ON bills.case_num = cases.case_num
+            WHERE 
+                (bills.deb_num LIKE 'A2006%' OR bills.deb_num LIKE 'A2007%' OR bills.deb_num LIKE 'A2008%' OR bills.deb_num LIKE 'A2009%' OR bills.deb_num LIKE 'A201%' OR bills.deb_num LIKE 'A202%') 
+                AND bills.sent IS NULL 
+                AND bills.bill_status = 0 
+                AND $where_clause 
+            ORDER BY 
+                CASE WHEN cases.billing_currency = 'English (USD)' THEN 2 WHEN cases.billing_currency = 'English (EUR)' THEN 3 ELSE 1 END, 
+                bills.case_num;";
+
+        $result = pg_query_params($dblink, $sql, $params);
+        if (!$result) {
+            throw new Exception("查詢執行失敗: " . pg_last_error($dblink));
+        }
+
+        // --- 初始化統計變數 ---
+        $totals = [
+            'twd' => ['legal' => 0, 'disbs' => 0, 'total' => 0, 'count' => 0],
+            'usd' => ['legal' => 0, 'disbs' => 0, 'total' => 0, 'count' => 0],
+            'eur' => ['legal' => 0, 'disbs' => 0, 'total' => 0, 'count' => 0],
+            'all_count' => 0
+        ];
+
+        $processed_rows = [];
+
+        // --- 迴圈處理每筆資料 (對應 Perl 的 while loop) ---
+        while ($row = pg_fetch_assoc($result)) {
+            // 1. 初始化顯示用的數值 (預設等於原始數值)
+            $row['show_legal_services'] = $row['legal_services'];
+            $row['show_disbs'] = $row['disbs'];
+            $row['show_foreign_legal_services'] = $row['foreign_legal2'];
+            $row['show_foreign_disbs'] = $row['foreign_disbs2'];
+            $row['show_oc'] = 0;
+            $row['show_ati'] = 0;
+            $row['display_oc_status'] = '';
+
+            // 2. 統計金額邏輯
+            if ($row['billing_currency'] == 'English (USD)') {
+                $totals['usd']['legal'] += floatval($row['foreign_legal2']);
+                $totals['usd']['disbs'] += floatval($row['foreign_disbs2']);
+                $totals['usd']['total'] += floatval($row['foreign_total2']);
+                $totals['usd']['count']++;
+            } elseif ($row['billing_currency'] == 'English (EUR)') {
+                $totals['eur']['legal'] += floatval($row['foreign_legal2']);
+                $totals['eur']['disbs'] += floatval($row['foreign_disbs2']);
+                $totals['eur']['total'] += floatval($row['foreign_total2']);
+                $totals['eur']['count']++;
+            } else {
+                $totals['twd']['legal'] += floatval($row['legal_services']);
+                $totals['twd']['disbs'] += floatval($row['disbs']);
+                $totals['twd']['total'] += floatval($row['total']);
+                $totals['twd']['count']++;
+            }
+            $totals['all_count']++;
+
+            // 3. 特殊顯示邏輯 (PPP, TDG, BMT, KA, VY)
+            if (in_array($row['retainer_num'], ['PPP', 'TDG', 'BMT'])) {
+                $row['ati_show_status'] = 'postshowntd';
+                $row['show_oc'] = 1;
+                $row['show_ati'] = 1;
+            }
+            if ((substr($row['case_num'], 0, 3) == 'GIM' || substr($row['case_num'], 0, 3) == 'GNT') && $row['bills_case_manager'] == 'KA') {
+                $row['ati_show_status'] = 'postshowntd';
+                $row['show_oc'] = 1;
+                $row['show_ati'] = 1;
+            }
+            if ($row['bills_case_manager'] == 'VY' || $row['bills_case_manager'] == 'KA') {
+                $row['ati_show_status'] = 'postshowntd';
+                $row['show_oc'] = 1;
+            }
+
+            // 4. 子查詢：檢查是否有需要轉列為法律服務費的支出 (TWD)
+            $sql_disb = "SELECT SUM(ntd_amount) as show_sum FROM disbursements 
+                         WHERE billed_flag = 0 AND show_flag = 1 AND show_as_legal_service_flag = 1 
+                         AND nocharge_flag = -1 AND deb_num = $1";
+            $res_disb = pg_query_params($dblink, $sql_disb, [$row['deb_num']]);
+            $disb_rec = pg_fetch_assoc($res_disb);
+
+            if ($disb_rec && $disb_rec['show_sum']) {
+                $row['show_legal_services'] = $row['legal_services'] + $disb_rec['show_sum'];
+                $row['show_disbs'] = $row['disbs'] - $disb_rec['show_sum'];
+            }
+
+            // 5. 子查詢：外幣支出轉列
+            $sql_disb_foreign = "SELECT SUM(foreign_amount2) as show_foreign_sum FROM disbursements 
+                                 WHERE billed_flag = 0 AND show_flag = 1 AND show_as_legal_service_flag = 1 
+                                 AND nocharge_flag = -1 AND deb_num = $1";
+            $res_disb_f = pg_query_params($dblink, $sql_disb_foreign, [$row['deb_num']]);
+            $disb_rec_f = pg_fetch_assoc($res_disb_f);
+
+            if ($disb_rec_f && $disb_rec_f['show_foreign_sum'] > 0) {
+                $row['show_foreign_legal_services'] = $row['foreign_legal2'] + $disb_rec_f['show_foreign_sum'];
+                $row['show_foreign_disbs'] = $row['foreign_disbs2'] - $disb_rec_f['show_foreign_sum'];
+            }
+
+            // 6. 子查詢：檢查 OC 發票期待 (tr table)
+            $sql_tr = "SELECT * FROM tr WHERE invoice_exp_status = '1' AND deb_num = $1";
+            $res_tr = pg_query_params($dblink, $sql_tr, [$row['deb_num']]);
+            if (pg_num_rows($res_tr) >= 1) {
+                $row['display_oc_status'] = '**OC Invoice Expected';
+            }
+
+            // 7. Retainer (預收費) 資訊補全
+            if (!empty($row['retainer_case_num']) || $row['retainer_ntd'] > 0 || $row['retainer_foreign'] > 0) {
+                // 如果原始資料不全，再去 cases 表查一次
+                if (empty($row['retainer_foreign']) && empty($row['retainer_ntd'])) {
+                    $case_num_temp = !empty($row['retainer_case_num']) ? $row['retainer_case_num'] : $row['case_num'];
+                    $sql_case = "SELECT * FROM cases WHERE case_num = $1";
+                    $res_case = pg_query_params($dblink, $sql_case, [$case_num_temp]);
+                    if ($case_rec = pg_fetch_assoc($res_case)) {
+                        $row['retainer_foreign'] = $case_rec['retainer_foreign'];
+                        $row['retainer_foreign_currency'] = $case_rec['retainer_foreign_currency'];
+                        $row['retainer_ntd'] = $case_rec['retainer_ntd'];
+                    }
+                }
+            }
+
+            // 8. 格式化數值 (Formatted Strings) 供前端直接顯示
+            $row['fmt_show_legal'] = number_format($row['show_legal_services']);
+            $row['fmt_show_disbs'] = number_format($row['show_disbs']);
+            $row['fmt_total'] = number_format($row['total']);
+
+            // 外幣格式化 (小數點後2位)
+            $row['fmt_foreign_show_legal'] = number_format($row['show_foreign_legal_services'], 2);
+            $row['fmt_foreign_show_disbs'] = number_format($row['show_foreign_disbs'], 2);
+            $row['fmt_foreign_total'] = number_format($row['foreign_total2'], 2);
+
+            // Retainer 格式化
+            $row['fmt_retainer_ntd'] = ($row['retainer_ntd'] > 0) ? number_format($row['retainer_ntd']) : '';
+            $row['fmt_retainer_foreign'] = ($row['retainer_foreign'] > 0) ? number_format($row['retainer_foreign'], 2) : '';
+
+            $processed_rows[] = $row;
+        }
+
+        // 回傳資料與總計
+        return [
+            'rows' => $processed_rows,
+            'totals' => $totals
+        ];
+    } finally {
+        if ($dblink) {
+            pg_close($dblink);
+        }
+    }
+}
