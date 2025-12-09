@@ -2,11 +2,11 @@
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
-require_once("db.ini");
+require_once("db23.ini");
 
-function getData($case_number, $match_or_like, $case_manager) {
+function getData($case_number, $match_or_like, $case_manager, $sort_key = 'case_num', $sort_order = 'ASC') {
     // 1. 資料庫連接
-    $dblink = @pg_connect(DB_CONNECT);
+    $dblink = @pg_connect(DB_CONNECT23);
     if (!$dblink) {
         throw new Exception("無法連接到資料庫");
     }
@@ -79,6 +79,42 @@ function getData($case_number, $match_or_like, $case_manager) {
         // 組合 SQL
         $where_clause = (count($conditions) > 0) ? implode(' AND ', $conditions) : '1=1';
 
+        // --- B. 新增：排序邏輯 ---
+
+        // 1. 白名單對應 (安全性：防止 SQL Injection)
+        // 前端傳來的 key => 資料庫實際欄位
+        $sort_mapping = [
+            'created'       => 'bills.draft_created',
+            'case_num'      => 'bills.case_num',
+            'manager'       => 'cases.case_manager',
+            'deb_num'       => 'bills.deb_num',
+            'legal_services' => 'bills.legal_services',
+            'disbs'         => 'bills.disbs'
+        ];
+
+        // 2. 驗證與預設值
+        if (!array_key_exists($sort_key, $sort_mapping)) {
+            $sort_key = 'case_num'; // 非法參數則回退到預設
+        }
+        $real_sort_col = $sort_mapping[$sort_key];
+
+        $sort_order = strtoupper($sort_order);
+        if ($sort_order !== 'ASC' && $sort_order !== 'DESC') {
+            $sort_order = 'ASC';
+        }
+
+        // 3. 組合 ORDER BY
+        // 關鍵：為了維持前端的 Subtotal 顯示正常，必須先排幣別，再排使用者選的欄位
+        // 如果使用者選的是 total (金額)，通常希望能由大到小，這由前端傳入 DESC 控制
+        $order_clause = "
+            CASE 
+                WHEN cases.billing_currency = 'English (USD)' THEN 2 
+                WHEN cases.billing_currency = 'English (EUR)' THEN 3 
+                ELSE 1 
+            END ASC, 
+            $real_sort_col $sort_order
+        ";
+
         $sql = "SELECT 
                 bills.*, 
                 cases.case_manager, 
@@ -100,8 +136,7 @@ function getData($case_number, $match_or_like, $case_manager) {
                 AND bills.bill_status = 0 
                 AND $where_clause 
             ORDER BY 
-                CASE WHEN cases.billing_currency = 'English (USD)' THEN 2 WHEN cases.billing_currency = 'English (EUR)' THEN 3 ELSE 1 END, 
-                bills.case_num;";
+                $order_clause;";
 
         $result = pg_query_params($dblink, $sql, $params);
         if (!$result) {

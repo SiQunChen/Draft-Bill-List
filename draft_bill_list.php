@@ -33,31 +33,31 @@
                     <?php
                     require_once('test_db/draft_bill_list_db.php');
 
+                    // 初始化預設值，避免下方 HTML 報錯
                     $result_data = [];
                     $totals = [];
                     $can_reset = false;
 
-                    if ($_SERVER["REQUEST_METHOD"] == "GET") {
-                        $case_number = isset($_GET['case_number']) ? $_GET['case_number'] : '';
-                        $match_or_like = isset($_GET['match_or_like']) ? $_GET['match_or_like'] : 'like';
-                        $case_manager = isset($_GET['case_manager']) ? $_GET['case_manager'] : '';
+                    // 設定預設排序參數
+                    $sort_key = isset($_GET['sort_key']) ? $_GET['sort_key'] : 'case_num';
+                    $sort_order = isset($_GET['sort_order']) ? $_GET['sort_order'] : 'ASC';
 
-                        // 簡單顯示查詢條件
-                        if ($case_number != '' && $case_manager != '') {
-                            echo "Case Number: $case_number | Case Manager: $case_manager";
-                        } elseif ($case_number != '') {
-                            echo "Case Number: $case_number";
-                        } elseif ($case_manager != '') {
-                            echo "Case Manager: $case_manager";
-                        } else {
-                            echo "Default";
-                        }
+                    // 初始化查詢參數
+                    $case_number = isset($_GET['case_number']) ? $_GET['case_number'] : '';
+                    $match_or_like = isset($_GET['match_or_like']) ? $_GET['match_or_like'] : 'like';
+                    $case_manager = isset($_GET['case_manager']) ? $_GET['case_manager'] : '';
+
+                    if ($_SERVER["REQUEST_METHOD"] == "GET" && isset($_GET['case_number'])) {
+                        // 顯示查詢條件
+                        echo "Case Number: $case_number | Case Manager: $case_manager";
 
                         try {
                             // 呼叫函數取得資料
-                            $api_result = getData($case_number, $match_or_like, $case_manager);
+                            $api_result = getData($case_number, $match_or_like, $case_manager, $sort_key, $sort_order);
                             $result_data = $api_result['rows'];
                             $totals = $api_result['totals'];
+
+                            // print_r($result_data);
 
                             // 取得權限旗標
                             if (isset($api_result['can_reset'])) {
@@ -67,6 +67,8 @@
                             $errorMessage = $e->getMessage();
                             echo "<script>alert(" . json_encode($errorMessage) . ");</script>";
                         }
+                    } else {
+                        echo "Default";
                     }
                     ?>
                 </h3>
@@ -75,14 +77,43 @@
             <div class="table-responsive">
                 <table class="table hv1-table table-hover  ">
                     <thead>
+                        <?php
+                        function getSortLink($label, $columnKey, $currentSortKey, $currentSortOrder) {
+                            // 複製目前的 GET 參數 (保留搜尋條件)
+                            $params = $_GET;
+
+                            // 設定新的排序鍵
+                            $params['sort_key'] = $columnKey;
+
+                            // 設定排序方向邏輯
+                            if ($columnKey === $currentSortKey) {
+                                // 如果點擊的是當前排序欄位，則反轉方向
+                                $params['sort_order'] = ($currentSortOrder === 'ASC') ? 'DESC' : 'ASC';
+                            } else {
+                                $params['sort_order'] = 'ASC';
+                            }
+
+                            // 決定箭頭圖示
+                            $icon = '';
+                            if ($columnKey === $currentSortKey) {
+                                $icon = ($currentSortOrder === 'ASC') ? '▲' : '▼';
+                            }
+
+                            // 建立 URL
+                            $url = "?" . http_build_query($params);
+
+                            // 回傳完整的 HTML 連結
+                            return "<a href='{$url}' style='color:inherit; text-decoration:none;'>{$label}{$icon}</a>";
+                        }
+                        ?>
                         <tr>
                             <th class="text-center"><input type="checkbox" id="select_all"></th>
-                            <th class="text-center">Created</th>
-                            <th class="text-center">Case Num</th>
-                            <th class="text-center">Manager</th>
-                            <th class="text-center">Debit Note</th>
-                            <th class="text-center">Legal Services</th>
-                            <th class="text-center">Disbs</th>
+                            <th class="text-center"><?php echo getSortLink('Created', 'created', $sort_key, $sort_order); ?></th>
+                            <th class="text-center"><?php echo getSortLink('Case Num', 'case_num', $sort_key, $sort_order); ?></th>
+                            <th class="text-center"><?php echo getSortLink('Manager', 'manager', $sort_key, $sort_order); ?></th>
+                            <th class="text-center"><?php echo getSortLink('Debit Note', 'deb_num', $sort_key, $sort_order); ?></th>
+                            <th class="text-center"><?php echo getSortLink('Legal Services', 'legal_services', $sort_key, $sort_order); ?></th>
+                            <th class="text-center"><?php echo getSortLink('Disbs', 'disbs', $sort_key, $sort_order); ?></th>
                             <th class="text-center">Total</th>
                             <th class="text-center">Edit</th>
                             <th class="text-center">Billing Note</th>
@@ -95,9 +126,9 @@
 
                     <tbody>
                         <?php
-                        $current_currency_flag = null; // 用來追蹤當前幣別區塊
-
                         if (!empty($result_data)) {
+                            $current_currency_flag = null; // 用來追蹤當前幣別區塊
+
                             foreach ($result_data as $key => $row) {
                                 $deb_num = $row['deb_num'];
                                 $id = $row['id'];
@@ -297,13 +328,11 @@
                                 $raw_r_foreign = isset($row['retainer_foreign']) ? floatval($row['retainer_foreign']) : 0;
 
                                 if ($raw_r_ntd > 0 || $raw_r_foreign > 0) {
-                                    // 檢查是否已有設定的扣抵金額，若無則預設為 0
-                                    $r_amount_val = (isset($row['retainer_amount']) && $row['retainer_amount'] !== '') ? $row['retainer_amount'] : '0';
-                                    $r_input_name = "retainer_amount_" . $row['id'];
-
-                                    $retainer_html .= "<br><div style='margin-top:5px;'>Minus retainer</div>";
-                                    // 使用 Bootstrap 樣式 input
-                                    $retainer_html .= "<input type='text' class='form-control input-sm' style='width: 80px; display:inline-block;' name='{$r_input_name}' value='{$r_amount_val}'>";
+                                    $retainer_html .= "<a href='debit.php?case_number={$row['retainer_case_num']}' style='text-decoration: none;'>
+                                                            <button type='button' class='btn btn-sm btn-primary'>
+                                                                抵扣
+                                                            </button>
+                                                        </a>";
                                 }
 
                                 // --- 新增：Reset 按鈕顯示邏輯 ---
@@ -355,8 +384,6 @@
                                         <td></td><td></td><td></td><td></td><td></td><td></td>
                                     </tr>";
                             }
-                        } else {
-                            echo "無資料";
                         }
                         ?>
                     </tbody>
@@ -368,13 +395,18 @@
                             小計 (TWD)
                         </th>
                         <?php
-                        echo "<th class='text-right'>" . $totals['all']['count'] . "</th>";
+                        $all_count = isset($totals['all']['count']) ? $totals['all']['count'] : 0;
+                        echo "<th class='text-right'>" . $all_count . "</th>";
                         ?>
                         <th></th>
                         <?php
-                        echo "<th class='text-right'>" . $totals['all']['fmt_legal'] . "</th>";
-                        echo "<th class='text-right'>" . $totals['all']['fmt_disbs'] . "</th>";
-                        echo "<th class='text-right'>" . $totals['all']['fmt_total'] . "</th>";
+                        $all_legal = isset($totals['all']['fmt_legal']) ? $totals['all']['fmt_legal'] : 0;
+                        $all_disbs = isset($totals['all']['fmt_disbs']) ? $totals['all']['fmt_disbs'] : 0;
+                        $all_total = isset($totals['all']['fmt_total']) ? $totals['all']['fmt_total'] : 0;
+
+                        echo "<th class='text-right'>" . $all_legal . "</th>";
+                        echo "<th class='text-right'>" . $all_disbs . "</th>";
+                        echo "<th class='text-right'>" . $all_total . "</th>";
                         ?>
                         <th></th>
                         <th></th>
