@@ -1,4 +1,4 @@
-<div id="sidebar-wrapper" class="active">
+<div id="sidebar-wrapper">
     <div class="sidebar-nav">
 
         <!-- 搜尋條件內容 -->
@@ -34,14 +34,45 @@
                     <button type="submit" name="list" value="list">
                         List
                     </button>
-                    <hr style="border-color: #345a6c">
+                </div>
+            </form>
 
-                    <!-- 申請開立收據按鈕 -->
-                    <button type="button" onclick="location.href='draft_bill_list_apply.php'" style="margin-right: 20px;">
-                        申請開立收據
+            <hr style="border-color: #345a6c">
+
+            <form id="action-form" method="POST" action="draft_bill_list_action_db.php" role="form">
+                <!-- Sent Date -->
+                <div class="form-group">
+                    <label for="sent_date" class="col-half">Sent Date</label>
+                    <input type="date" class="col-half" name="sent_date" id="sent_date">
+                </div>
+
+                <!-- Discount(%) -->
+                <div class="form-group">
+                    <label for="discount" class="col-half">Discount(%)</label>
+                    <input type="number" min="0" max="100" step="1" class="col-half" name="discount" id="discount">
+                </div>
+
+                <div class="s-form-bot">
+                    <!-- Update 按鈕 -->
+                    <button type="button" id="btn-update" style="margin-right: 15px;">
+                        Update
+                    </button>
+
+                    <!-- Apply 按鈕 -->
+                    <button type="button" id="btn-apply">
+                        Apply
                     </button>
                 </div>
             </form>
+
+            <hr style="border-color: #345a6c">
+
+            <!-- 申請開立收據按鈕 -->
+            <div style="text-align: center;">
+                <button type="button" onclick="location.href='draft_bill_list_apply.php'">
+                    申請開立收據
+                </button>
+            </div>
         </div>
 
         <!-- 搜尋條件內容結束 -->

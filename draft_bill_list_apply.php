@@ -25,7 +25,7 @@
     ?>
     <!-- 側邊搜尋內容結束-->
 
-    <div id="winkler-container" class="active">
+    <div id="winkler-container">
         <!-- 標題 -->
         <div class="block-hv100">
             <div class="all-heading">

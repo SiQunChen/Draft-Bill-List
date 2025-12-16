@@ -14,6 +14,60 @@
     <link rel="stylesheet" href="css/left-search.css">
 </head>
 
+<style>
+    /* Switch Button Style */
+    .switch {
+        position: relative;
+        display: inline-block;
+        width: 50px;
+        height: 24px;
+        vertical-align: middle;
+        margin-left: 10px;
+    }
+
+    .switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+
+    .slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #ccc;
+        -webkit-transition: .4s;
+        transition: .4s;
+        border-radius: 34px;
+    }
+
+    .slider:before {
+        position: absolute;
+        content: "";
+        height: 16px;
+        width: 16px;
+        left: 4px;
+        bottom: 4px;
+        background-color: white;
+        -webkit-transition: .4s;
+        transition: .4s;
+        border-radius: 50%;
+    }
+
+    input:checked+.slider {
+        background-color: #2196F3;
+    }
+
+    input:checked+.slider:before {
+        -webkit-transform: translateX(26px);
+        -ms-transform: translateX(26px);
+        transform: translateX(26px);
+    }
+</style>
+
 <body data-spy="scroll" data-target=".amanda-nav">
     <?php
     require_once("menu.php");
@@ -25,7 +79,7 @@
     ?>
     <!-- 側邊搜尋內容結束-->
 
-    <div id="winkler-container" class="active">
+    <div id="winkler-container">
         <!-- 標題 -->
         <div class="block-hv100">
             <div class="all-heading">
@@ -71,6 +125,14 @@
                         echo "Default";
                     }
                     ?>
+
+                    <div class="pull-right">
+                        Show ATI
+                        <label class="switch">
+                            <input type="checkbox" id="show_ati" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
                 </h3>
             </div>
 
@@ -117,8 +179,8 @@
                             <th class="text-center">Total</th>
                             <th class="text-center">Edit</th>
                             <th class="text-center">Billing Note</th>
-                            <th class="text-center">OC Invoice</th>
-                            <th class="text-center">ATI Category</th>
+                            <th class="text-center col-show-ati">OC Invoice</th>
+                            <th class="text-center col-show-ati">ATI Category</th>
                             <th class="text-center">Retainer</th>
                             <th class="text-center">Reset</th>
                         </tr>
@@ -162,8 +224,8 @@
                                                 <td class='text-right'>{$total_total}</td>
                                                 <td></td>
                                                 <td></td>
-                                                <td></td>
-                                                <td></td>
+                                                <td class='col-show-ati'></td>
+                                                <td class='col-show-ati'></td>
                                                 <td></td>
                                                 <td></td>
                                             </tr>";
@@ -175,12 +237,17 @@
                                 }
 
                                 // --- 數值顯示邏輯 (根據幣別選擇顯示欄位) ---
+                                $discount_html = "";
+                                if (isset($row['discount']) && $row['discount'] > 0) {
+                                    $discount_html = "<br><span style='font-size: 12px; color: red;'>(" . $row['discount'] . "% off)</span>";
+                                }
+
                                 if ($currency_label == 'USD' || $currency_label == 'EUR') {
-                                    $display_legal = $row['fmt_foreign_show_legal'] . '<br>' . $row['currency2'];
+                                    $display_legal = $row['fmt_foreign_show_legal'] . '<br>' . $row['currency2'] . $discount_html;
                                     $display_disbs = $row['fmt_foreign_show_disbs'] . '<br>' . $row['currency2'];
                                     $display_total = $row['fmt_foreign_total'] . '<br>' . $row['currency2'];
                                 } else {
-                                    $display_legal = $row['fmt_show_legal'];
+                                    $display_legal = $row['fmt_show_legal'] . $discount_html;
                                     $display_disbs = $row['fmt_show_disbs'];
                                     $display_total = $row['fmt_total'];
                                 }
@@ -358,8 +425,8 @@
                                             <a href='http://billing/cgi-bin/disb_new.pl?deb_num={$deb_num}'>Add Disbursements</a>
                                         </td>
                                         <td class='text-left'>{$row['billing_note']}</td>
-                                        <td class='text-left'>{$oc_invoice_html}</td>
-                                        <td class='text-left'>{$ati_html}</td>
+                                        <td class='text-left col-show-ati'>{$oc_invoice_html}</td>
+                                        <td class='text-left col-show-ati'>{$ati_html}</td>
                                         <td class='text-left'>{$retainer_html}</td>
                                         <td class='text-left'>{$reset_html}</td>
                                     </tr>";
@@ -381,7 +448,12 @@
                                         <td class='text-right'>{$total_legal}</td>
                                         <td class='text-right'>{$total_disbs}</td>
                                         <td class='text-right'>{$total_total}</td>
-                                        <td></td><td></td><td></td><td></td><td></td><td></td>
+                                        <td></td>
+                                        <td></td>
+                                        <td class='col-show-ati'></td>
+                                        <td class='col-show-ati'></td>
+                                        <td></td>
+                                        <td></td>
                                     </tr>";
                             }
                         }
@@ -410,8 +482,8 @@
                         ?>
                         <th></th>
                         <th></th>
-                        <th></th>
-                        <th></th>
+                        <th class='col-show-ati'></th>
+                        <th class='col-show-ati'></th>
                         <th></th>
                         <th></th>
                     </tfoot>
@@ -439,7 +511,9 @@
         $(document).on('hidden.bs.modal', function(e) {
             $(e.target).removeData('bs.modal');
         });
+    </script>
 
+    <script>
         // 全選/取消全選功能
         $('#select_all').on('click', function() {
             var isChecked = $(this).prop('checked');
@@ -629,7 +703,96 @@
                     $select1.removeAttr('data-selected'); // 清除標記
                 }
             });
+        });
+    </script>
 
+    <script>
+        // Show ATI 按鈕控制
+        $(document).ready(function() {
+            $('#show_ati').on('change', function() {
+                if ($(this).is(':checked')) {
+                    // 如果 Switch 是開啟的，顯示欄位
+                    $('.col-show-ati').show();
+                } else {
+                    // 如果 Switch 是關閉的，隱藏欄位
+                    $('.col-show-ati').hide();
+                }
+            });
+        });
+    </script>
+
+    <script>
+        // 處理 Update 和 Apply 的送出邏輯
+        $(document).ready(function() {
+
+            // 通用的送出函式
+            function submitBillAction(actionName) {
+                var $form = $('#action-form'); // 抓取 Sidebar 的表單
+                var checkedRows = $('input[name="row_check_box[]"]:checked');
+
+                // 1. 檢查是否有勾選任何項目
+                if (checkedRows.length === 0) {
+                    alert('請至少勾選一筆帳單 (Please select at least one bill).');
+                    return;
+                }
+
+                // 2. 二次確認 (如果是 Apply 動作)
+                if (actionName === 'apply') {
+                    if (!confirm('確定要寄出帳單並押上日期嗎？此操作無法復原。\nAre you sure you want to apply the sent date?')) {
+                        return;
+                    }
+                }
+
+                // 3. 遍歷每一個被勾選的 checkbox
+                checkedRows.each(function() {
+                    var id = $(this).val(); // 取得帳單 ID
+
+                    // A. 複製 ID (必須)
+                    $form.append('<input type="hidden" name="row_check_box[]" value="' + id + '">');
+
+                    // B. 複製 ATI 相關欄位 (Input, Select)
+                    // 使用 data-id 屬性來精準定位該 ID 對應的輸入框
+                    // 注意：我們只複製 "有值" 或 "被選中" 的資料，以減輕 payload
+
+                    // 複製所有的 text input, number input, hidden input (例如 project_owner, class_count, retainer_amount)
+                    // 這裡特別加上 retainer_amount 的選取
+                    $('.ati-container[data-id="' + id + '"] input[type="text"], input[name="retainer_amount_' + id + '"]').each(function() {
+                        $form.append('<input type="hidden" name="' + $(this).attr('name') + '" value="' + $(this).val() + '">');
+                    });
+
+                    // 複製 Select 下拉選單 (ATI Category, Status)
+                    $('.ati-container[data-id="' + id + '"] select').each(function() {
+                        $form.append('<input type="hidden" name="' + $(this).attr('name') + '" value="' + $(this).val() + '">');
+                    });
+
+                    // 複製 Checkbox (New Matter) - 只有被勾選的才送出
+                    $('.ati-container[data-id="' + id + '"] input[type="checkbox"]:checked').each(function() {
+                        $form.append('<input type="hidden" name="' + $(this).attr('name') + '" value="1">');
+                    });
+
+                    // C. 複製 Radio Button (OC Invoice Expected/Cancel)
+                    var ocRadio = $('input[name="invoice_exp_status_' + id + '"]:checked');
+                    if (ocRadio.length > 0) {
+                        $form.append('<input type="hidden" name="' + ocRadio.attr('name') + '" value="' + ocRadio.val() + '">');
+                    }
+                });
+
+                // 4. 加入動作類型參數 (模擬按鈕的 name="update" 或 name="apply")
+                // 因為我們是用 JS submit，原本按鈕的 name 不會被傳送，所以要手動加
+                $form.append('<input type="hidden" name="' + actionName + '" value="true">');
+
+                // 5. 正式送出表單
+                $form.submit();
+            }
+
+            // 綁定按鈕點擊事件
+            $('#btn-update').on('click', function() {
+                submitBillAction('update');
+            });
+
+            $('#btn-apply').on('click', function() {
+                submitBillAction('apply');
+            });
         });
     </script>
 </body>
