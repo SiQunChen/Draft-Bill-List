@@ -15,7 +15,7 @@
 </head>
 
 <style>
-    /* Switch Button Style */
+    /* Show ATI 按鈕 */
     .switch {
         position: relative;
         display: inline-block;
@@ -66,6 +66,12 @@
         -ms-transform: translateX(26px);
         transform: translateX(26px);
     }
+
+    /* 修正 icon 會跑出標題列的 bug */
+    .hv1-table thead,
+    .hv1-table thead th {
+        z-index: 999 !important;
+    }
 </style>
 
 <body data-spy="scroll" data-target=".amanda-nav">
@@ -86,6 +92,7 @@
                 <h3>
                     <?php
                     require_once('test_db/draft_bill_list_db.php');
+                    require_once("test_db/syslog_db.php");
 
                     // 初始化預設值，避免下方 HTML 報錯
                     $result_data = [];
@@ -100,6 +107,12 @@
                     $case_number = isset($_GET['case_number']) ? $_GET['case_number'] : '';
                     $match_or_like = isset($_GET['match_or_like']) ? $_GET['match_or_like'] : 'like';
                     $case_manager = isset($_GET['case_manager']) ? $_GET['case_manager'] : '';
+
+                    // 檢查權限
+                    $initial = $_SESSION['initial'] ?? '';
+                    $has_permission = checkPrivacy($initial, 'Draft_bill_list_apply_sent');
+                    $today = date('Y-m-d');
+                    $return_url = urlencode('draft_bill_list.php?' . $_SERVER['QUERY_STRING']);
 
                     if ($_SERVER["REQUEST_METHOD"] == "GET" && isset($_GET['case_number'])) {
                         // 顯示查詢條件
@@ -170,6 +183,7 @@
                         ?>
                         <tr>
                             <th class="text-center"><input type="checkbox" id="select_all"></th>
+                            <th class="text-center">SN</th>
                             <th class="text-center"><?php echo getSortLink('Created', 'created', $sort_key, $sort_order); ?></th>
                             <th class="text-center"><?php echo getSortLink('Case Num', 'case_num', $sort_key, $sort_order); ?></th>
                             <th class="text-center"><?php echo getSortLink('Manager', 'manager', $sort_key, $sort_order); ?></th>
@@ -192,8 +206,16 @@
                             $current_currency_flag = null; // 用來追蹤當前幣別區塊
 
                             foreach ($result_data as $key => $row) {
+                                $sn = $key + 1;
                                 $deb_num = $row['deb_num'];
                                 $id = $row['id'];
+                                $pppoc_status = $row['pppoc_status'];
+
+                                if ($pppoc_status) {
+                                    $pppoc_html = "<br><label style='color:red;'>PPP OC</label>";
+                                } else {
+                                    $pppoc_html = "";
+                                }
 
                                 // --- 幣別分組標題顯示邏輯 ---
                                 // 根據 billing_currency 決定顯示文字
@@ -214,6 +236,7 @@
                                         $total_total = $totals[strtolower($current_currency_flag)]['fmt_total'];
                                         $total_count = $totals[strtolower($current_currency_flag)]['count'];
                                         echo "<tr style='background-color: d1e7dd;'>
+                                                <td></td>
                                                 <td></td>
                                                 <td></td>
                                                 <td class='text-left'>Total ({$current_currency_flag})</td>
@@ -243,13 +266,43 @@
                                 }
 
                                 if ($currency_label == 'USD' || $currency_label == 'EUR') {
-                                    $display_legal = $row['fmt_foreign_show_legal'] . '<br>' . $row['currency2'] . $discount_html;
-                                    $display_disbs = $row['fmt_foreign_show_disbs'] . '<br>' . $row['currency2'];
+                                    // show_as_legal
+                                    if ($row['show_as_legal_foreign_flag']) {
+                                        $raw_legal = $row['fmt_foreign_legal_original'] . " (" . $row['fmt_foreign_show_legal'] . ")";
+                                        $display_disbs = $row['fmt_foreign_disbs_original'] . " (" . $row['fmt_foreign_show_disbs'] . ")";
+                                    } else {
+                                        $raw_legal = $row['fmt_foreign_show_legal'];
+                                        $display_disbs = $row['fmt_foreign_show_disbs'];
+                                    }
+
+                                    // 紅字檢查
+                                    if (floatval(str_replace(',', '', $raw_legal)) == 0) {
+                                        $raw_legal = "<span style='color: red;'>{$raw_legal}</span>";
+                                    }
+
+                                    $display_legal = $raw_legal . '<br>' . $row['currency2'] . $discount_html;
+                                    $display_disbs .= '<br>' . $row['currency2'];
                                     $display_total = $row['fmt_foreign_total'] . '<br>' . $row['currency2'];
                                 } else {
-                                    $display_legal = $row['fmt_show_legal'] . $discount_html;
-                                    $display_disbs = $row['fmt_show_disbs'];
+                                    if ($row['show_as_legal_flag']) {
+                                        $raw_legal = $row['fmt_legal_original'] . " (" . $row['fmt_show_legal'] . ")";
+                                        $display_disbs = $row['fmt_disbs_original'] . " (" . $row['fmt_show_disbs'] . ")";
+                                    } else {
+                                        $raw_legal = $row['fmt_show_legal'];
+                                        $display_disbs = $row['fmt_show_disbs'];
+                                    }
+
+                                    // 紅字檢查
+                                    if (floatval(str_replace(',', '', $raw_legal)) == 0) {
+                                        $raw_legal = "<span style='color: red;'>{$raw_legal}</span>";
+                                    }
+
+                                    $display_legal = $raw_legal . $discount_html;
                                     $display_total = $row['fmt_total'];
+                                }
+
+                                if (isset($row['display_oc_status']) && !empty($row['display_oc_status'])) {
+                                    $display_disbs .= "<br><span style='color:red; font-weight:bold; font-size:12px;'>" . $row['display_oc_status'] . "</span>";
                                 }
 
                                 // --- OC Invoice 欄位顯示邏輯 ---
@@ -367,62 +420,69 @@
                                 // --- Retainer 欄位顯示邏輯 ---
                                 $retainer_html = "";
 
-                                // Part A: 顯示 Retainer 案件編號
-                                if (!empty($row['retainer_case_num'])) {
-                                    $retainer_html .= htmlspecialchars($row['retainer_case_num']) . "<br>";
-                                }
+                                // 判斷預收款餘額 (根據帳單幣別判斷)
+                                $retainer_currency = $row['retainer_currency'];
+                                $retainer_amount = $retainer_currency == 'TWD' ? $row['retainer_ntd'] : $row['retainer_foreign'];
 
-                                // Part B: 顯示餘額 (根據帳單幣別判斷)
-                                // 邏輯：若非 USD 也非 EUR，則視為台幣；否則顯示外幣
-                                if ($row['billing_currency'] != 'English (USD)' && $row['billing_currency'] != 'English (EUR)') {
-                                    $retainer_html .= "TWD";
-                                    // TWD 模式
-                                    // fmt_retainer_ntd 來自後端 draft_bill_list_db.php 的處理
-                                    if (!empty($row['fmt_retainer_ntd'])) {
-                                        $retainer_html .= " " . $row['fmt_retainer_ntd'];
+                                // 已抵扣金額
+                                $deduct = $retainer_currency == 'TWD' ? $row['deduct_twd'] : $row['deduct_foreign'];
+
+                                // 只有在有預收款時才顯示
+                                if ($retainer_amount + $deduct > 0) {
+                                    if ($deduct > 0) {
+                                        $retainer_html .= "<input type='text' class='form-control retainer-input' 
+                                                                value='" . $deduct . "' 
+                                                                style='width:80px; display:inline-block;'
+                                                                readonly
+                                                            >";
                                     }
-                                } else {
-                                    // 外幣模式
-                                    if (!empty($row['fmt_retainer_foreign'])) {
-                                        $f_curr = isset($row['retainer_foreign_currency']) ? $row['retainer_foreign_currency'] : '';
-                                        $retainer_html .= $f_curr . " " . $row['fmt_retainer_foreign'];
-                                    }
-                                }
 
-                                // Part C: 顯示扣抵輸入框 (Minus retainer)
-                                // 判斷條件：只要 (台幣餘額 > 0) 或 (外幣餘額 > 0) 就顯示
-                                $raw_r_ntd = isset($row['retainer_ntd']) ? floatval($row['retainer_ntd']) : 0;
-                                $raw_r_foreign = isset($row['retainer_foreign']) ? floatval($row['retainer_foreign']) : 0;
-
-                                if ($raw_r_ntd > 0 || $raw_r_foreign > 0) {
-                                    $retainer_html .= "<a href='debit.php?case_number={$row['retainer_case_num']}' style='text-decoration: none;'>
-                                                            <button type='button' class='btn btn-sm btn-primary'>
-                                                                抵扣
-                                                            </button>
-                                                        </a>";
+                                    // 按鈕
+                                    $retainer_html .= "<button type='button' class='btn btn-sm btn-info'
+                                                            data-toggle='modal' data-target='#retainerModal' 
+                                                            data-bills-case-num='{$row['case_num']}'
+                                                            data-deb-num='{$deb_num}'
+                                                            data-total='{$row['total']}'
+                                                            data-retainer-case='{$row['retainer_case_num']}'
+                                                            data-retainer-amount='{$retainer_amount}'
+                                                            data-retainer-currency='{$retainer_currency}'
+                                                            data-deduct='{$deduct}'>
+                                                            <i class='glyphicon glyphicon-list'></i> Manage
+                                                        </button>";
                                 }
 
                                 // --- 新增：Reset 按鈕顯示邏輯 ---
                                 $reset_html = "";
-                                if ($can_reset) {
-                                    // 參考你的 update 連結格式，使用 http://billing/cgi-bin/...
-                                    // 若你的環境不需要完整網域，也可以只寫 /cgi-bin/draft_reset.pl
-                                    $reset_html = "<a href='http://billing/cgi-bin/draft_reset.pl?deb_num={$deb_num}'>Reset</a>";
+                                if ($can_reset || true) {
+                                    $reset_html = "<a href='test_db/draft_bill_list_reset_db.php?deb_num={$deb_num}' 
+                                                        class='btn btn-sm btn-danger' 
+                                                        onclick='return confirm(\"確定要 Reset 嗎？\");'>
+                                                        <i class='glyphicon glyphicon-refresh'></i> Reset
+                                                    </a>";
                                 }
 
                                 // --- 輸出表格行 ---
                                 echo "<tr>
                                         <td class='text-center'><input type='checkbox' name='row_check_box[]' value='{$row['id']}'></td>
+                                        <td class='text-center'>$sn</td>
                                         <td class='text-left'>{$row['draft_created']}</td>
                                         <td class='text-left'>{$row['case_num']}</td>
                                         <td class='text-left'>{$row['case_manager']}</td>
-                                        <td class='text-left'>{$deb_num}</td>
+                                        <td class='text-left'><a href='http://slashlaw-new/draft_bill_list_bill_mod.php?id={$row['id']}&deb_num={$deb_num}&return_url={$return_url}'>{$deb_num}</a>{$pppoc_html}</td>
                                         <td class='text-right'>{$display_legal}</td>
                                         <td class='text-right'>{$display_disbs}</td>
                                         <td class='text-right'>{$display_total}</td>
                                         <td class='text-left'>
-                                            <a href='http://billing/cgi-bin/bill_edit.pl?deb_num={$deb_num}'>Update</a><br>
-                                            <a href='http://billing/cgi-bin/disb_new.pl?deb_num={$deb_num}'>Add Disbursements</a>
+                                            <a href='http://slashlaw-new/draft_bill_list_edit.php?deb_num={$deb_num}&return_url={$return_url}' 
+                                            class='btn btn-sm btn-primary' 
+                                            style='margin-bottom: 5px;'>
+                                            <i class='glyphicon glyphicon-edit'></i> Edit
+                                            </a>
+                                            <br>
+                                            <a href='http://slashlaw-new/disb_insert.php?deb_num={$deb_num}&return_url={$return_url}' 
+                                            class='btn btn-sm btn-success'>
+                                            <i class='glyphicon glyphicon-plus'></i> Add Disbs
+                                            </a>
                                         </td>
                                         <td class='text-left'>{$row['billing_note']}</td>
                                         <td class='text-left col-show-ati'>{$oc_invoice_html}</td>
@@ -440,6 +500,7 @@
                                 $total_count = $totals[strtolower($current_currency_flag)]['count'];
 
                                 echo "<tr style='background-color: d1e7dd;'>
+                                        <td></td>
                                         <td></td>
                                         <td></td>
                                         <td class='text-left'>Total ({$current_currency_flag})</td>
@@ -461,6 +522,7 @@
                     </tbody>
 
                     <tfoot>
+                        <th></th>
                         <th></th>
                         <th></th>
                         <th class='text-left'>
@@ -724,6 +786,9 @@
     <script>
         // 處理 Update 和 Apply 的送出邏輯
         $(document).ready(function() {
+            // 將 PHP 變數傳遞給 JS
+            const hasPermission = <?php echo json_encode((bool)$has_permission); ?>;
+            const Today = "<?php echo $today; ?>";
 
             // 通用的送出函式
             function submitBillAction(actionName) {
@@ -738,7 +803,20 @@
 
                 // 2. 二次確認 (如果是 Apply 動作)
                 if (actionName === 'apply') {
-                    if (!confirm('確定要寄出帳單並押上日期嗎？此操作無法復原。\nAre you sure you want to apply the sent date?')) {
+                    var sentDateVal = $('#sent_date').val();
+                    if (!sentDateVal) {
+                        alert('請選擇 Sent Date 才能執行 Apply。\n(Please select a Sent Date.)');
+                        $('#sent_date').focus();
+                        return;
+                    }
+
+                    if (!hasPermission && sentDateVal !== Today) {
+                        alert('權限不足：您只能將 Sent Date 設定為今天。\n(Permission denied: You can only set the Sent Date to today.)');
+                        $('#sent_date').focus();
+                        return;
+                    }
+
+                    if (!confirm('確定要寄出帳單並押上日期嗎？\n(Are you sure you want to apply the sent date?)')) {
                         return;
                     }
                 }
@@ -795,6 +873,39 @@
             });
         });
     </script>
+
+    <script>
+        function exportExcel() {
+            // 1. 取得所有被勾選的 checkbox
+            var checkedRows = $('input[name="row_check_box[]"]:checked');
+
+            // 2. 檢查是否有勾選
+            if (checkedRows.length === 0) {
+                alert('請至少勾選一筆資料以進行匯出。\n(Please select at least one row to export.)');
+                return;
+            }
+
+            // 3. 收集 ID
+            var ids = [];
+            checkedRows.each(function() {
+                ids.push($(this).val());
+            });
+
+            // 4. 將 ID 陣列轉為逗號分隔的字串 (例如: "101,102,105")
+            var ids_string = ids.join(',');
+
+            // 5. 透過 GET 請求跳轉下載 (在新分頁開啟，避免影響當前頁面)
+            var url = 'test_db/draft_bill_list_excel.php?ids=' + encodeURIComponent(ids_string);
+
+            window.open(url, '_blank');
+        }
+    </script>
+
+    <!-- 申請開立收據 Modal -->
+    <?php require_once("draft_bill_list_create_receipt.php"); ?>
+
+    <!-- 預收款進階分配 Modal -->
+    <?php require_once("draft_bill_list_retainer.php"); ?>
 </body>
 
 </html>

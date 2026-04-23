@@ -1,0 +1,331 @@
+
+<SCRIPT language="javascript">
+function checkdata ()
+{
+   if (document.bill.discount.value>100 || document.bill.discount.value<0 || document.bill.discount.value !=parseInt(document.bill.discount.value))
+   {
+      alert("discount value must smaller than 100 and more than 0 and value must integer" );
+      return false;
+   } else {
+      return true;
+   }
+}
+
+function KeepCount() {
+  var NewCount = 0;
+  var length;
+  var count=0;
+  var x=1;
+  var y=2;
+  
+  length=document.forms.length;
+  count = length /7;
+  
+  for(i=0;i<=count;i++){
+     NewCount = 0;
+     if (document.forms.elements[x].checked)
+     {
+        NewCount = NewCount + 1
+     }
+     if (document.forms.elements[y].checked)
+     {
+        NewCount = NewCount + 1
+     }
+     x = x+7;
+     y = y+7;
+    
+     if (NewCount == 2)
+     {
+        alert('\'No charge\' and \'Legal service\' Only choose one')
+        document.chks;
+//        return false;
+     }
+  }
+}
+
+function change_ledes_code(theselect) {
+  var id = theselect.selectedIndex;
+  var ids = document.forms.elements['id_num_a[]'];
+  var debs = document.forms.elements['deb_num_a[]'];
+  var loop = ids.length;
+  for (i=0;i< loop;i++) {
+    if (ids[i].value !='test123') {
+      var oname = 'dis_ledes_code_ckBx '+ids[i].value+' '+debs[i].value;
+      document.forms[oname].value = theselect.options[id].value;
+    }
+  }
+}
+
+
+
+
+</SCRIPT>
+
+
+<form name="bill" method="post" action="../cgi-bin/bill_mod_update.pl" onsubmit='return checkdata()'>
+ <input type=hidden name="in_manager" value="[% in_manager  %]">
+ <input type=hidden name="in_case_num_dir" value="[% in_case_num_dir  %]">
+
+<table>
+<tr>
+   <td>Bill ID </td> <td>[% bill.id %]<input 
+                                       type="hidden" 
+                                       value=[% bill.id %]
+                                       name="id">
+                                      </td>
+   
+</tr>
+<tr>
+   <td>Draft Created</td> <td>[% bill.draft_created %]</td>
+</tr>
+
+
+
+[% IF bill.mid_flag %]
+<tr>
+   <td>MID Type</td> <td>
+   <select name="mid_bill_type">
+   <option value=0  [% IF bill.mid_bill_type==0 %]selected[% END %]>Unassigned
+   <option value=1  [% IF bill.mid_bill_type==1 %]selected[% END %]>Registratibility Search
+   <option value=2  [% IF bill.mid_bill_type==2 %]selected[% END %]>Application
+   <option value=3  [% IF bill.mid_bill_type==3 %]selected[% END %]>Prosecution to Registration
+   <option value=4  [% IF bill.mid_bill_type==4 %]selected[% END %]>Conflicts/Infringements
+   <option value=5  [% IF bill.mid_bill_type==5 %]selected[% END %]>Oppositions/Cancellations
+   <option value=6  [% IF bill.mid_bill_type==6 %]selected[% END %]>Renewal
+   <option value=7  [% IF bill.mid_bill_type==7 %]selected[% END %]>Licensing/Assignment
+   <option value=8  [% IF bill.mid_bill_type==8 %]selected[% END %]>Administration
+   <option value=9  [% IF bill.mid_bill_type==9 %]selected[% END %]>Assignments
+   <option value=10  [% IF bill.mid_bill_type==10 %]selected[% END %]>Customs Issues
+   <option value=11  [% IF bill.mid_bill_type==11 %]selected[% END %]>Design Protection
+   <option value=12  [% IF bill.mid_bill_type==12 %]selected[% END %]>Domain Names
+   <option value=13  [% IF bill.mid_bill_type==13 %]selected[% END %]>External Licensing(including License Recordal) 
+   <option value=14  [% IF bill.mid_bill_type==14 %]selected[% END %]>Litigation 
+   <option value=15  [% IF bill.mid_bill_type==15 %]selected[% END %]>NPD(New Product Development) Filing/Protection Strategy Work 
+   <option value=16  [% IF bill.mid_bill_type==16 %]selected[% END %]>Protective Use and Maintenance 
+   <option value=17  [% IF bill.mid_bill_type==17 %]selected[% END %]>Searching 
+   <option value=18  [% IF bill.mid_bill_type==18 %]selected[% END %]>Watching Service 
+
+   
+    
+</td>
+</tr>
+
+[% END %]
+
+<tr>
+   <td>Debit Note Number </td> <td>[% bill.deb_num %]
+   <input type="hidden" name="deb_num" value="[% bill.deb_num %]" >
+
+   </td>
+</tr>
+
+[% IF bill.billing_currency =='English (USD)' || bill.billing_currency =='English (EUR)' %]
+<tr>
+ <td>Foreign Currency</td> 
+  <td>  
+   <input type ="text" name="currency2" value ="[% bill.currency2 %]" readonly="readonly">
+  </td>
+</tr>
+[% END %]
+
+
+<tr>
+ <td>Legal Services</td> 
+ <td>
+[% IF bill.billing_currency =='English (USD)' || bill.billing_currency =='English (EUR)' %]
+  <input type ="text" name="foreign_legal2" value = "[% bill.foreign_legal2 %]">
+[% ELSE %]
+  <input type="text" name="legal_services" value = "[% bill.legal_services %]">
+[% END %]
+ </td>
+</tr>
+ 
+<tr>
+ <td>Disbursements</td> 
+ <td> 
+[% IF bill.billing_currency =='English (USD)' || bill.billing_currency =='English (EUR)' %]
+  <input type ="text" name="foreign_disbs2" value = "[% bill.foreign_disbs2 %]" readonly="readonly">
+[% ELSE %]
+  <input type ="text" name="disbs" value = "[% bill.disbs %]" readonly="readonly">
+[% END %]
+ </td>
+</tr>
+<!--
+<tr>
+   <td>Translation Services</td> <td> <input type="text"
+                                name="trans_services"
+                                value = [% bill.trans_services %]
+				>
+   </td>
+</tr>
+-->
+<tr>
+ <td>Discount</td> 
+ <td>                         
+  <input type="text" name="discount" value = [% bill.discount %] >
+ </td>
+</tr>
+
+<tr>
+ <td>Total</td> 
+ <td> 
+[% IF bill.billing_currency =='English (USD)' || bill.billing_currency =='English (EUR)'  %]
+<!--
+  <input type="text" name="foreign_total2" value = [%# bill.foreign_total2 %] >
+-->
+  [% bill.foreign_total2 %]
+[% ELSE %]
+<!--
+  <input type="text" name="total" value = [%# bill.total %] >
+-->
+  [% bill.total %]
+[% END %]
+ </td>
+</tr>
+
+<tr>
+ <td>Undiscounted Legal Services</td> 
+ <td>    
+[% IF bill.billing_currency =='English (USD)' || bill.billing_currency =='English (EUR)'  %]
+  [% bill.foreign_undiscount_legal2 %]
+[% ELSE %]
+  [% bill.undiscounted_legal_services %]
+[% END %]
+ </td>
+</tr>
+
+[% IF bill.billing_currency !='English (USD)' && bill.billing_currency !='English (EUR)'  %]
+<tr>
+   <td>USD total</td> <td>[% bill.usd_total %]</td>
+</tr>
+[% END %]
+<!--
+<tr>
+ <td>Sent</td> 
+ <td> 
+  <input type ="text" name="sent" value = [%# bill.sent %]>
+ </td>
+</tr>
+-->
+
+<tr>
+   <td valign = "top">Bill Narrative</td> 
+   <td ><textarea 
+        rows=10
+        cols=40
+        name="bill_narrative"
+        >[% bill.bill_narrative %]</textarea>
+   </td>
+</tr>
+
+<tr>
+   <td valign = "top">Notes [client does not see this]</td> 
+   <td ><textarea 
+        rows=10
+        cols=40
+        name="remark"
+        >[% bill.remark %]</textarea>
+   </td>
+</tr>
+<tr>
+
+<td>&nbsp;</td>
+
+<td>
+<input type="submit" value="Modify Bill">
+</td>
+</table>
+
+</form>
+<a href="../cgi-bin/bill_draft_list.pl?case_manager=[% in_manager %]&case_num=[% in_case_num_dir %] ">Go back to draft bill list</a>
+
+<hr>
+<form name="forms" method='post' action='../cgi-bin//disb_draft_bill_mod.pl?bill_id=[% bill.id %]&deb_num=[% bill.deb_num %]&in_manager=[% in_manager %]&in_case_num_dir=[% in_case_num_dir %]'>
+
+<p>
+<table width='85%'>
+<tr>
+<th>刪除</th> 
+<th>No charge</th>
+<th>Show as legal service</th>
+<th>LEDES Code</th>
+<th>代墊編號 </th>
+<th>案號</th> 
+<th>代墊項目</th>
+<th>台幣金額</th>
+</tr>
+<input type="button" value="Add new disbursements" onclick="location.href='../cgi-bin/disb_new.pl?deb_num=[% bill.deb_num %]&disb_submit=add_late&in_manager=[% in_manager %]&in_case_num_dir=[% in_case_num_dir %]' ">
+<!--  <a href="../cgi-bin/disb_new.pl?deb_num=[% bill.deb_num %]&initials=BI&disb_submit=add_late"">加入新代墊</a> -->
+
+  <input type="hidden" name="id_num_a[]" value="test123" >
+  <input type="hidden" name="deb_num_a[]" value="test123" >
+
+[% FOREACH row = result %]
+  <input type="hidden" name="hide_ckBx [% row.id %] [% row.deb_num %]" value="">
+  <input type="hidden" name="legal_ckBx [% row.id %] [% row.deb_num %]" value="">
+  <input type="hidden" name="id_num_a[]" value="[% row.id %]" >
+  <input type="hidden" name="deb_num_a[]" value="[% row.deb_num %]" >
+  [%IF  row.even == 1 %]
+<tr bgcolor="antiquewhite" >
+  [% ELSE %]
+<tr bgcolor="lightgray">
+  [% END %]
+
+  <td>
+   <input type="checkbox" name="apply_ckBx [% row.id %] [% row.deb_num %]" value="yes" >
+  </td>
+
+  <td>
+   <input type="checkbox" name="hide_ckBx [% row.id %] [% row.deb_num %]" value="yes"
+   [% IF row.show_flag == -1 %]
+   checked
+   [% END %]
+    >
+  </td>
+
+  <td>
+   <input type="checkbox" name="legal_ckBx [% row.id %] [% row.deb_num %]" value="yes"
+[% IF row.show_as_legal_service_flag == 1 %]
+checked
+[% END %]
+>
+  </td>
+
+  <td  align="CENTER">
+   <select name="dis_ledes_code_ckBx [% row.id %] [% row.deb_num %]" size="1" value="">
+ [% FOREACH dis_code = dis_ledes_code %]
+  [% IF row.dis_ledes_code == dis_code.dis_ledes_code  %]
+   <option selected value="[% dis_code.dis_ledes_code %]">[% dis_code.dis_ledes_code%] [%dis_code.dis_ledes_content %] </option>
+  [% ELSE %]
+   <option value="[% dis_code.dis_ledes_code %]">[%dis_code.dis_ledes_code%] [%dis_code.dis_ledes_content %]</option>
+  [% END %]
+ [% END %]
+
+  </td>
+
+  <td width='12%'>
+<!-- <a href="../cgi-bin/bill_mod.pl?id=[% row.id %]">[% row.id %]</a> -->
+<a href="../cgi-bin/disb_new.pl?disb_submit=edit&id=[% row.id %]&deb_num=[% row.deb_num %]&fee_earners=draft_bill&case_num_one=[% bill.id %]&in_manager=[% in_manager %]&in_case_num_dir=[% in_case_num_dir %]">[% row.id %]</a>
+</td>
+
+  <td width='10%'>[% row.case_num %]</td>
+  <td width='10%'>[% row.disb_name %]</td>
+  <td width='10%' align=right>[% row.ntd_amount %]</td>
+</tr>
+[% END %]
+
+</tbody>
+</table>
+
+Set all LEDES code 
+ <select name="dis_ledes_code_all" size="1" value="" onChange="change_ledes_code(this);">
+ [% FOREACH dis_code = dis_ledes_code %]
+   <option value="[% dis_code.dis_ledes_code %]">[%dis_code.dis_ledes_code%] [%dis_code.dis_ledes_content %]</option>
+ [% END %]
+ </SELECT> 
+<BR>
+
+<input type=submit name="bill_list_submit" value="Update Disbursements">
+<input type="hidden" name="deb_nums" value="[% bill.deb_num %]" >
+
+</form>

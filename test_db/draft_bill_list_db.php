@@ -4,7 +4,7 @@ ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 require_once("db23.ini");
 
-function getData($case_number, $match_or_like, $case_manager, $sort_key = 'case_num', $sort_order = 'ASC') {
+function getData($case_number, $match_or_like, $case_manager, $sort_key = 'case_num', $sort_order = 'ASC', $target_ids = []) {
     // 1. 資料庫連接
     $dblink = @pg_connect(DB_CONNECT23);
     if (!$dblink) {
@@ -33,6 +33,20 @@ function getData($case_number, $match_or_like, $case_manager, $sort_key = 'case_
         $conditions = [];
         $params = [];
         $param_index = 1;
+
+        if (!empty($target_ids)) {
+            $in_placeholders = [];
+            foreach ($target_ids as $id) {
+                if (is_numeric($id)) {
+                    $in_placeholders[] = "$" . $param_index;
+                    $params[] = $id;
+                    $param_index++;
+                }
+            }
+            if (!empty($in_placeholders)) {
+                $conditions[] = "bills.id IN (" . implode(', ', $in_placeholders) . ")";
+            }
+        }
 
         // 處理 case_number
         if ($case_number !== '') {
@@ -116,27 +130,39 @@ function getData($case_number, $match_or_like, $case_manager, $sort_key = 'case_
         ";
 
         $sql = "SELECT 
-                bills.*, 
-                cases.case_manager, 
-                cases.case_num, 
-                cases.billing_note, 
-                cases.retainer_num, 
-                cases.pppoc_status, 
-                cases.retainer_case_num, 
-                cases.retainer_foreign, 
-                cases.retainer_foreign_currency, 
-                cases.retainer_ntd, 
-                cases.party_en_name_billing, 
-                (CASE WHEN bills.draft_created >= '2022-11-26' THEN 1 ELSE 0 END) AS currency_flag
-            FROM bills 
-            LEFT JOIN cases ON bills.case_num = cases.case_num
-            WHERE 
-                (bills.deb_num LIKE 'A2006%' OR bills.deb_num LIKE 'A2007%' OR bills.deb_num LIKE 'A2008%' OR bills.deb_num LIKE 'A2009%' OR bills.deb_num LIKE 'A201%' OR bills.deb_num LIKE 'A202%') 
-                AND bills.sent IS NULL 
-                AND bills.bill_status = 0 
-                AND $where_clause 
-            ORDER BY 
-                $order_clause;";
+                    bills.*, 
+                    cases.case_manager, 
+                    cases.case_num, 
+                    cases.billing_note, 
+                    cases.retainer_num, 
+                    cases.pppoc_status, 
+                    cases.retainer_case_num, 
+                    cases.party_en_name_billing, 
+                    client_pay_total.temp_twd_total_amount as retainer_ntd,
+                    client_pay_total.temp_foreign_total_amount as retainer_foreign,
+                    client_pay_total.currency as retainer_currency,
+                    (CASE WHEN bills.draft_created >= '2022-11-26' THEN 1 ELSE 0 END) AS currency_flag,
+                    COALESCE(deduct.sum_twd, 0) AS deduct_twd,
+                    COALESCE(deduct.sum_foreign, 0) AS deduct_foreign
+                FROM bills 
+                LEFT JOIN cases ON bills.case_num = cases.case_num
+                LEFT JOIN client_pay_total ON cases.retainer_case_num = client_pay_total.case_num
+                -- 取得該筆帳單已抵扣的金額
+                LEFT JOIN (
+                    SELECT 
+                        bills_case_num, 
+                        SUM(twd_amount) AS sum_twd, 
+                        SUM(foreign_amount) AS sum_foreign
+                    FROM client_pay_history
+                    GROUP BY bills_case_num
+                ) AS deduct ON cases.case_num = deduct.bills_case_num
+                WHERE 
+                    (bills.deb_num LIKE 'A2006%' OR bills.deb_num LIKE 'A2007%' OR bills.deb_num LIKE 'A2008%' OR bills.deb_num LIKE 'A2009%' OR bills.deb_num LIKE 'A201%' OR bills.deb_num LIKE 'A202%') 
+                    AND bills.sent IS NULL 
+                    AND bills.bill_status = 0 
+                    AND $where_clause 
+                ORDER BY 
+                    $order_clause;";
 
         $result = pg_query_params($dblink, $sql, $params);
         if (!$result) {
@@ -156,6 +182,8 @@ function getData($case_number, $match_or_like, $case_manager, $sort_key = 'case_
         // --- 迴圈處理每筆資料 (對應 Perl 的 while loop) ---
         while ($row = pg_fetch_assoc($result)) {
             // 1. 初始化顯示用的數值 (預設等於原始數值)
+            $row['show_as_legal_flag'] = false;
+            $row['show_as_legal_foreign_flag'] = false;
             $row['show_legal_services'] = $row['legal_services'];
             $row['show_disbs'] = $row['disbs'];
             $row['show_foreign_legal_services'] = $row['foreign_legal2'];
@@ -212,6 +240,7 @@ function getData($case_number, $match_or_like, $case_manager, $sort_key = 'case_
             if ($disb_rec && $disb_rec['show_sum']) {
                 $row['show_legal_services'] = $row['legal_services'] + $disb_rec['show_sum'];
                 $row['show_disbs'] = $row['disbs'] - $disb_rec['show_sum'];
+                $row['show_as_legal_flag'] = true;
             }
 
             // 5. 子查詢：外幣支出轉列
@@ -224,6 +253,7 @@ function getData($case_number, $match_or_like, $case_manager, $sort_key = 'case_
             if ($disb_rec_f && $disb_rec_f['show_foreign_sum'] > 0) {
                 $row['show_foreign_legal_services'] = $row['foreign_legal2'] + $disb_rec_f['show_foreign_sum'];
                 $row['show_foreign_disbs'] = $row['foreign_disbs2'] - $disb_rec_f['show_foreign_sum'];
+                $row['show_as_legal_foreign_flag'] = true;
             }
 
             // 6. 子查詢：檢查 OC 發票期待 (tr table)
@@ -233,35 +263,20 @@ function getData($case_number, $match_or_like, $case_manager, $sort_key = 'case_
                 $row['display_oc_status'] = '**OC Invoice Expected';
             }
 
-            // 7. Retainer (預收費) 資訊補全
-            if (!empty($row['retainer_case_num']) || $row['retainer_ntd'] > 0 || $row['retainer_foreign'] > 0) {
-                // 如果原始資料不全，再去 cases 表查一次
-                if (empty($row['retainer_foreign']) && empty($row['retainer_ntd'])) {
-                    $case_num_temp = !empty($row['retainer_case_num']) ? $row['retainer_case_num'] : $row['case_num'];
-                    $sql_case = "SELECT * FROM cases WHERE case_num = $1";
-                    $res_case = pg_query_params($dblink, $sql_case, [$case_num_temp]);
-                    if ($case_rec = pg_fetch_assoc($res_case)) {
-                        $row['retainer_foreign'] = $case_rec['retainer_foreign'];
-                        $row['retainer_foreign_currency'] = $case_rec['retainer_foreign_currency'];
-                        $row['retainer_ntd'] = $case_rec['retainer_ntd'];
-                    }
-                }
-            }
-
-            // 8. 格式化數值 (Formatted Strings) 供前端直接顯示
+            // 7. 格式化數值 (Formatted Strings) 供前端直接顯示
             // 台幣格式化 (整數)
+            $row['fmt_legal_original'] = number_format($row['legal_services']);
+            $row['fmt_disbs_original'] = number_format($row['disbs']);
             $row['fmt_show_legal'] = number_format($row['show_legal_services']);
             $row['fmt_show_disbs'] = number_format($row['show_disbs']);
             $row['fmt_total'] = number_format($row['total']);
 
             // 外幣格式化 (小數點後2位)
+            $row['fmt_foreign_legal_original'] = number_format($row['foreign_legal2'], 2);
+            $row['fmt_foreign_disbs_original'] = number_format($row['foreign_disbs2'], 2);
             $row['fmt_foreign_show_legal'] = number_format($row['show_foreign_legal_services'], 2);
             $row['fmt_foreign_show_disbs'] = number_format($row['show_foreign_disbs'], 2);
             $row['fmt_foreign_total'] = number_format($row['foreign_total2'], 2);
-
-            // Retainer 格式化
-            $row['fmt_retainer_ntd'] = ($row['retainer_ntd'] > 0) ? number_format($row['retainer_ntd']) : '';
-            $row['fmt_retainer_foreign'] = ($row['retainer_foreign'] > 0) ? number_format($row['retainer_foreign'], 2) : '';
 
             // 總計格式化
             $totals['twd']['fmt_legal'] = number_format($totals['twd']['legal']);
@@ -287,7 +302,7 @@ function getData($case_number, $match_or_like, $case_manager, $sort_key = 'case_
             'can_reset' => $can_reset
         ];
     } finally {
-        if ($dblink) {
+        if (isset($dblink) && is_resource($dblink)) {
             pg_close($dblink);
         }
     }

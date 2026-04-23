@@ -1,0 +1,331 @@
+<title> New Disbursements</title>
+<SCRIPT LANGUAGE="javascript">
+
+function account_money() 
+{
+  var rate = document.disbs.x_rate.value;
+  var foreign_amount = document.disbs.foreign_amount.value;
+  if ( document.disbs.currency.value != '') {
+     document.disbs.ntd_amount.value = Math.round(rate * foreign_amount); 
+     document.getElementById('ntd').readOnly = true;
+  } else {
+     document.getElementById('ntd').readOnly = false;
+  }
+}
+
+function account_money2() 
+{
+  var usd_rate = [% xrate_usd %];
+  var eur_rate = [% xrate_eur %];
+  var foreign_amount2 = document.disbs.foreign_amount2.value;
+  if ( document.disbs.currency2.value == 'USD') {
+     document.disbs.ntd_amount.value = Math.round( usd_rate * foreign_amount2); 
+     document.getElementById('ntd').readOnly = true;
+  
+  } else if ( document.disbs.currency2.value == 'EUR') {
+     document.disbs.ntd_amount.value = Math.round( eur_rate * foreign_amount2); 
+     document.getElementById('ntd').readOnly = true;
+  } else {
+     document.getElementById('ntd').readOnly = false;
+  }
+}
+
+function change_currency2() 
+{
+  var usd_rate = [% xrate_usd %];
+  var eur_rate = [% xrate_eur %];
+  var textc='';
+  var displaySpan = document.getElementById("rate2_data");
+temp = document.disbs.currency2.value;
+  if ( document.disbs.currency2.value == 'USD') {
+    textc='Rate: '+usd_rate;
+    displaySpan.textContent = textc;
+  } else if ( document.disbs.currency2.value == 'EUR') {
+    textc='Rate: '+eur_rate;
+    displaySpan.textContent = textc;
+  } else {
+    displaySpan.textContent = "";
+  }
+}
+
+function checkdata() 
+{
+  var start_day = document.disbs.date.value;
+  var now = new Date();
+  var mon=1+now.getMonth();
+//  var year=1900+now.getYear();
+  var year=now.getFullYear();
+
+  var today=year+'/'+mon+'/'+now.getDate();
+
+  if ( start_day.length <8)
+  {
+     alert("請輸入正確日期格式，如：2011/07/02 or 2011-07-02 or 20110702");
+     return false;
+  }
+  if (start_day.match(/-/g))
+  {
+    start_day = start_day.replace(/-/g, "\/") ;
+  }
+  if (!start_day.match(/\//g))
+  {
+    start_day = start_day.substring(0,4)+'/'+start_day.substring(4,6)+'/'+start_day.substring(6,8);
+  }
+
+  var fd1 = new Date(start_day);
+  var fd2 = new Date(today);
+
+  var gap=fd2.getTime()-fd1.getTime();
+
+  if (Math.floor(gap/(1000*60*60*24))>180 || Math.floor(gap/(1000*60*60*24)) < -30  )
+  {
+//     alert(today);
+//     alert(fd1);
+//     alert(fd2);
+//     alert(gap);
+     alert('超出可輸入的時間範圍');
+     return false;
+  }
+
+
+// ntd_amount can not empty , >=0 and must integer
+//  if (document.disbs.ntd_amount.value =='' || document.disbs.ntd_amount.value != parseInt(document.disbs.ntd_amount.value)  ||  document.disbs.ntd_amount.value < 0 )
+  if (document.disbs.ntd_amount.value =='' || document.disbs.ntd_amount.value != parseInt(document.disbs.ntd_amount.value) )
+  {
+     alert('NTD$ amount must integer')
+     return false;
+  }
+
+  if (document.disbs.initials.value =='')
+  {
+     alert('initials must has content')
+     return false;
+  } else {
+     return true;
+  }
+  return false;
+
+}
+function KeepCount() 
+{
+  var NewCount = 0
+
+  if (document.disbs.show_flag.checked)
+  {
+     NewCount = NewCount + 1
+  }
+
+  if (document.disbs.show_as_legal_service_flag.checked)
+  {
+     NewCount = NewCount + 1
+  }
+
+  if (NewCount == 2)
+  {
+     alert('Only choose one')
+     document.disbs; return false;
+  }
+}
+</SCRIPT>
+<h4>New Disbursements [% IF action == 'add_late_disb' %]for draft debit note number [% deb_num %] [% END %]</h4>
+[% WRAPPER html/table  pad=2 space=5  %]
+<form accept-charset="utf8" name=disbs   method=POST ACTION="../cgi-bin/disb_new.pl" onsubmit="return checkdata()">
+ <input type=hidden name="in_manager" value="[% in_manager  %]">
+ <input type=hidden name="in_case_num_dir" value="[% in_case_num_dir  %]">
+
+ 
+<tr>
+    <td>Case Number</td>
+    [% IF mode == 'new_dis' %]
+      <td>   <input type="text" name="case_num" value= "[% case_num %]">  </td>
+       <input type="hidden" name="mode" value="new_dis">
+    [% ELSE %]
+      <td>[% case_num %] </td>
+      <input type="hidden" name="case_num" value= "[% case_num %]"> 
+    [% END %]
+    <input type="hidden" name="id" value= "[% disb.id %]"> 
+    <input type="hidden" name="start_" value="[% start_ %]">
+    <input type="hidden" name="end_" value="[% end_ %]">
+    [% IF action == 'add_late_disb' %]
+        <input type="hidden" name="deb_num" value="[% deb_num %]">
+	<input type="hidden" name="billed_flag" value="0">
+    [% END %]
+  </td>
+</tr>
+
+<tr>
+     <td>Date(請填入發生日期)</td>
+    <td>
+       <input type="text" name="date" value= "[% date %]"> 
+    </td>
+</tr>
+<!-- <tr>
+    <td>Company Code</td>
+    <td><select NAME="comp_code"> 
+           <option value ='1'>Bozhong tax
+           <option value ='B'>Bozhong Falv
+           <option value ='C'>De Zhong Guwen
+           <option value ='D'>Bo Zhong Jituan
+       </select>
+    </td>
+</tr>
+-->
+<tr>
+    <td>Account Code</td>
+  <td>
+         <input TYPE="text" NAME="disb_code"  >
+    </td>
+
+
+</tr>
+<!--    
+<tr>
+  <td>Show and charge client?</td>
+  <td>
+    <input TYPE="checkbox" NAME="show_flag" value="1" checked>
+  </td>
+</tr>
+
+
+<tr>
+  <td>Show as Legal Service?</td>
+  <td>
+    <input TYPE="checkbox" NAME="show_as_legal_service_flag" value="1">
+  </td>
+</tr>
+-->
+
+
+
+<tr>
+    <td>NTD$ Amount</td>
+    <td><input TYPE="text" NAME="ntd_amount" SIZE="10" id="ntd" VALUE = [% disb.ntd_amount %]></td>
+</tr>
+
+<tr>
+    <td>Notes (Client does not see this)</td>
+    <td><textarea NAME="notes" ROWS="3" COLS="50"></textarea></td>
+</tr>
+
+<tr>
+  <td>Currency</td>
+  <td>
+    <select name="currency"> 
+      <option value="" selected>
+      <option value="USD" >USD
+      <option value="EUR" >EUR
+      <option value="AUD" >AUD
+      <option value="HKD" >HKD
+      <option value="SGD" >SGD
+      <option value="JPY" >JPY
+      <option value="NZD" >NZD
+      <option value="GBP" >GBP
+      <option value="CNY" >CNY
+      <option value="CAD" >CAD
+    </select>
+    <input name="foreign_amount" size="10" value="0" onChange="account_money()">
+    Rate
+    <input name="x_rate" size="10" value="0" onChange="account_money()">
+  </td>
+</tr>
+
+<tr>
+  <td>Currency2</td>
+  <td>
+    <select name="currency2" onChange="change_currency2()"> 
+      <option value="" selected>
+      <option value="USD" >USD
+      <option value="EUR" >EUR
+    </select>
+    <input name="foreign_amount2" size="10" value="0" onChange="account_money2()">
+    <span id="rate2_data"></span> 
+  </td>
+</tr>
+
+<tr>
+    <td>Counsel City</td>
+    <td><input TYPE="text" NAME="counsel_area"  VALUE = [% disb.counsel_area %]></td>
+</tr>
+<tr>
+    <td>Counsel Name</td>
+    <td><input TYPE="text" NAME="counsel_name"  VALUE = [% disb.counsel_name %]></td>
+</tr>
+
+<tr>
+    <td>Counsel Invoice Date</td>
+    <td><input TYPE="text" NAME="invoice_date"  VALUE = [% disb.invoice_date %]></td>
+</tr>
+
+<tr>
+    <td>Counsel Invoice No.</td>
+    <td><input TYPE="text" NAME="counsel_invoice"  VALUE = [% disb.counsel_invoice %]></td>
+</tr>
+
+
+<tr>
+  <td>No charge </td>
+  <td>
+    <input TYPE="checkbox" NAME="show_flag" value="-1" onClick="return KeepCount()">
+  </td>
+</tr>
+
+<tr>
+  <td>Bill Show as Legal Service</td>
+  <td>
+    <input TYPE="checkbox" NAME="show_as_legal_service_flag" value="1" onClick="return KeepCount()" >
+  </td>
+</tr>
+
+<tr>
+    <td>Payment Date</td>
+    <td>
+       <input type="text" name="paydate" > 
+    </td>
+</tr>
+
+<tr>
+    <td>BPM Date</td>
+    <td>
+       <input type="text" name="bpm_date" value= "[% date %]" > 
+    </td>
+</tr>
+
+<tr>
+    <td>initials</td>
+    <td>
+    [% IF action == 'add_late_disb' %]
+<!--       <input NAME="initials" VALUE="[% initials %]"> -->
+       <input type="hidden" value={% refer_url %]> 
+    [% END %]
+      <select NAME="initials"]
+        <option> 
+           <option SELECTED> 
+      [% FOREACH person = people %]
+        [% IF person.0  == initials  %]
+           <option > [% person.0 %]
+        [% ELSE %]
+           <option> [% person.0 %]
+        [% END %]
+      [% END %]
+   </select>
+</td>
+</tr>
+
+<tr>
+    <td>Narrative (Client sees this)</td>
+    <td><textarea NAME="narrative" cols="60" rows=4>[% disb.narrative %]</textarea></td>
+</tr>
+
+<tr>
+    <td>Disbs ID Relation</td>
+    <td><input TYPE="text" NAME="disbs_id_relation"  VALUE ="" ></td>
+</tr>
+
+
+<tr>
+    <td>&nbsp</td>
+    <td><input TYPE="SUBMIT" NAME="disb_submit" VALUE="Submit Disbursement"></td>
+</tr>
+
+[% END %]
+</form>

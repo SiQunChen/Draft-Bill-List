@@ -1,0 +1,152 @@
+
+
+
+<SCRIPT LANGUAGE="javascript">
+<!--
+function keepcount() {
+  
+  var NewCount = 0;
+  var length;
+
+
+  length=document.forms.length;
+  for(i=0;i<length;i++){     
+     NewCount = 0;
+     if (document.forms[i].show_flag.checked) 
+     {
+        NewCount = NewCount + 1
+     }
+     if (document.forms[i].show_as_legal_service_flag.checked) 
+     {
+        NewCount = NewCount + 1
+     }
+
+     if (NewCount == 2)
+     {
+        alert('\'No charge\' and \'Legal service\' Only choose one')
+        document.chks;
+        return false;
+     }
+  }
+}
+
+   function checkdata() {
+    length=document.forms.length;
+    for(i=0;i<length;i++){     
+      var amount = document.forms[i].ntd_amount.value;
+      amount = amount.replace(',','');
+
+      if (amount >= 10000 && document.forms[i].show_flag.checked ) {
+       alert("當代墊費用有超過 $10,000 時，如果要進行 No charge，請以Email的方式徵詢案件協調合夥人或代理合夥人同意, 同時副本給財務部FC，由FC進行變更 	");
+         return false;
+      }
+    }
+
+}
+
+-->
+</SCRIPT>
+
+
+[% WRAPPER html/table  pad=10 space=4  %]
+ <tr>
+  [%- FOREACH item = [ 'Case' ,'Date', 'Disbursement', 'NT$ Amount' ,'Foreign Currency','Foreign Currency Amount', 'Entered by'] %]
+  <th>
+    [% item %]
+  </th>
+  [%- END %]
+ </tr>
+ [% FOREACH disb =  disbs %]
+  <form accept-charset="utf8"  name="chks" action='../cgi-bin/disb_confirm.pl' method='POST' onsubmit="return checkdata()" >
+   <input type="hidden" name="in_initials" value="[% initials %]">
+   <input type='hidden' name='in_case_num' value="[% in_case_num %]">
+   <input type="hidden" name="select_mode" value="[% select_mode %]">
+   <input type="hidden" name="all_cases" value="[% all_cases %]">
+   <input type="hidden" name="ar" value="[% ar %]">
+   <input type="hidden" name="mid" value="[% mid %]">
+
+   <input type=hidden name=id value='[% disb.id %]' readonly>	
+   [% IF disb.show_flag == 1 %]
+     <tr bgcolor='#BBBBBB'>
+   [% ELSE %]
+     <tr>
+   [% END %]
+       <td>
+<!-- <input type=text name='case_num' value='[% disb.case_num%]' size='6'>  -->
+        [% disb.case_num%]
+        <input type='hidden' name='case_num' value='[% disb.case_num%]' >
+        <input type='hidden' name='currency' value='[% disb.currency%]' >
+        <input type='hidden' name='foreign_amount' value='[% disb.foreign_amount %]' >
+       </td>
+       <td>
+        <input type=text name='date' value='[% disb.date %]' size=8> 
+       </td>
+       <td>
+        <input type=text name='disb_code' value='[% disb.disb_code %]' readonly="readonly" size='6'>
+         [% disb.disb_name %]
+       </td>
+       <td>
+        <input type=text name='ntd_amount' value='[% disb.ntd_amount %]' readonly="readonly" size='6'>
+       </td>
+       <td>
+        <input type=text name='currency2' value='[% disb.currency2 %]' readonly="readonly" size='6'>
+       </td>
+       <td>
+        <input type=text name='foreign_amount2' value='[% disb.foreign_amount2 %]' readonly="readonly" size='6'>
+       </td>
+       <td>
+        <input type=text name='initials' value='[% disb.initials%]' size='4'>  
+       </td>
+     </tr>
+   [% IF disb.show_flag == 1 %]
+     <tr bgcolor='#BBBBBB'>
+   [% ELSE %]
+     <tr>
+   [% END %]
+      <td colspan='3'>
+       <input type=text name='narrative' value='[% disb.narrative %]' size='64'>  
+      </td>
+      <td colspan="2">
+       <input type="checkbox" name="show_flag" value="-1" [% IF disb.show_flag == -1 %] checked [% END %] onClick="return keepcount()"> No charge</input>
+       <input type="checkbox" name="show_as_legal_service_flag" value="1" [% IF disb.show_as_legal_service_flag == 1 %] checked [% END %] onClick="return keepcount()"> Legal service</input>
+       <input type="checkbox" name="check_bills" value="1" [% IF disb.check_bills == 1 %] checked [% END %] >Selected</input>
+      </td>
+      <td colspan="2"> 
+       <input type=submit value='Save'> 
+      </td>
+      <input type=hidden name=deb_num value='[% disb.deb_num %]'>	
+      <input type=hidden name=ntd_total value='[% ntd_total %]'>	
+     </tr>
+  </form>
+ [% END %]
+[% END %]
+<hr>   
+
+   [% WRAPPER html/table  pad=10 space=4  %]
+      <tr>
+
+         <td>
+	 Number of Disbursements: [% records %] 
+	 </td> 
+	  <td>
+	 &nbsp 
+	 </td>
+	   <td>
+	  Total NTD$ Amount [% ntd_total %] 
+	 </td>
+	  <td>
+	 &nbsp 
+	 </td>
+      </tr>
+
+[% IF mode == 'update' %]
+
+Back to <a href="../cgi-bin/bill_draft_list.pl">Draft Bill List</a>
+
+[% ELSE %]
+<a href="../cgi-bin/bill_init_dev.pl?case_num=[% case_num %]&select_mode=[% select_mode %]&initials=[% initials %]&in_case_num=[% in_case_num %]&all_cases=[% all_cases %]&ar=[% ar %]&mid=[% mid %]">Back to Bill draft</a>
+[% END %]
+
+
+[% END %]
+     

@@ -1,0 +1,254 @@
+<html><head><title>Bill init</title>
+<meta Http-Equiv="Content-Type" Content="text/html; charset=utf8">
+<link rel="stylesheet" href="../stylesheet/wp.css" type="text/css">
+
+
+<style type="text/css">
+.posthidden {display:none}
+.postshown {display:table-row}
+</style>
+
+
+
+<SCRIPT LANGUAGE="javascript">
+
+function expandcollapse_hidden (type,postid)
+{
+  for (i=1;i<=postid;i++)
+  {
+     types=type+i;
+     whichpost = document.getElementById(types);
+     whichpost.className="posthidden";
+  }
+}
+function expandcollapse_show (type,postid)
+{
+  for (i=1;i<=postid;i++)
+  {
+     types=type+i;
+     whichpost = document.getElementById(types);
+     whichpost.className="postshown";
+  }
+}
+function expandcollapse (type,postid)
+{
+  for (i=1;i<=postid;i++)
+  {
+     types=type+i;
+     whichpost = document.getElementById(types);
+     if (whichpost.className=="postshown")
+     {
+        whichpost.className="posthidden";
+     } else {
+        whichpost.className="postshown";
+     }
+  }
+}
+
+function change_ledes_code(theselect) {
+  var id = theselect.selectedIndex
+  var vname = document.bills.elements['id_num_a[]'];
+  var loop = vname.length;
+  for (i=0;i<loop;i++) {
+    var oname = 'ledes_code '+vname[i].value;
+    document.bills[oname].value = theselect.options[id].value;
+  }
+   
+}
+
+function check_show_nocharge(num,type)
+{
+  var nocharge='nocharge_flag '+num;
+  var show='show_flag '+num;
+  var show_id=document.getElementById(show)
+  var nocharge_id=document.getElementById(nocharge)
+  var status_inocharge= nocharge_id.checked;
+  
+  if (nocharge_id.checked == false && show_id.checked == false) {
+     alert('Error: Can not Nocharge disable and Show disable.')
+     return false;
+  }
+}
+
+
+
+
+</script>
+</head>
+<body>
+<H1>Draft Bill [% case_num %]</H1><p>
+<strong>[% narrative %]</strong>
+<p>
+<a href="../cgi-bin/case.pl?action=Edit%20Case&case_num=[% case_num %]&deb_num=[% deb_num %]">Update Case</a>
+<BR>
+
+<div style="cursor:pointer;" onclick="javascript:expandcollapse_show('A','[% count_1000 %]')">
+<u> Show( Show All,顯示所有TR )   </u>
+</div>
+<div style="cursor:pointer;" onclick="javascript:expandcollapse_hidden('A','[% count_1000 %]')">
+<u> Hide (Hide  tr hidden from client by unchecking 'show',只顯示打勾的 'show') </u>
+</div>
+
+<BR>
+
+ <table cellpadding=3>
+
+[% IF  bill.discount >0 %] 
+<tr>
+  <td>    [% PERL %]'&nbsp' x 10 [% END %]</td>
+  <td>Undiscounted Legal Services[%IF flat_fee %] (flat fee)[%END %] </td>
+  <td> 
+  [% IF flat_fee %]
+   [% flat_fee %]
+  [% ELSE %]
+   [% IF case.billing_currency == 'English (USD)' || case.billing_currency == 'English (EUR)' %]
+     [% currency2 %]
+     [% bill.foreign_undiscount_legal2 %] 
+   [% ELSE %]
+     NTD [% bill.undiscounted_legal_services %] 
+   [% END %]
+  [% END %]
+  </td>   
+</tr>
+[% END %] 
+
+<tr>
+ <td>[% PERL %]'&nbsp' x 10 [% END %]</td>
+  <td>Legal Services[%IF flat_fee %] (flat fee)[%END %] </td>
+  <td>
+ [% IF case.billing_currency == 'English (USD)' || case.billing_currency == 'English (EUR)' %]
+       [% currency2 %]
+       [% IF flat_fee_foreign >0  %]
+        [% flat_fee_foreign %]
+       [% ELSE %]
+         [% foreign_legal2 %]
+       [% END %]
+ [% ELSE %] 
+   NTD 
+   [% IF flat_fee %]
+    [% flat_fee %]
+   [% ELSE %]
+    [% legal_services %] 
+   [% END %]
+ [% END %] 
+
+[% IF  bill.discount >0 %]
+   (discounted [% bill.discount %] perc.) 	
+[% END %]
+
+ </td>
+</tr>
+<tr>
+ <td> [% PERL %]'&nbsp' x 10 [% END %] </td>
+ <td>
+      [% INCLUDE splash/text
+         content = 'Disbursements'
+         link    = "../cgi-bin/disb_init.pl?case_num=$case_num&mode=update&deb_num=$deb_num"
+         select  = 0
+         bold    = 1
+      %]
+ </td> 
+ [% IF case.billing_currency == 'English (USD)' || case.billing_currency == 'English (EUR)' %]
+   <td>
+   [% currency2 %]
+   [% foreign_disbs2 %]
+   [% IF show_disbs_foreign > 0%]
+     ([% show_disbs_foreign %]) 
+   [% END %]
+   </td> 
+ [% ELSE %] 
+   <td>NTD [% disbs %] </td>
+ [% END %] 
+</tr>
+
+<tr>
+ <td> <pre>[% PERL %]print (' ' x 120); [% END %]</pre></td>
+ <td>Total</td>
+ <td>
+ [% IF case.billing_currency == 'English (USD)' || case.billing_currency == 'English (EUR)' %]
+   [% currency2 %]
+   [% foreign_total2 %]
+ [% ELSE %] 
+   NTD [% total %]
+ [% END %] 
+  </td>
+</tr>
+</table>
+
+
+<p>
+<form name="bills" action='bill_update_draft.pl?deb_num=[% deb_num %]&in_case_num_dir=[% in_case_num_dir %]&in_manager=[% in_manager %]' method='post'>
+<table align='center' cellpadding=3 cellspacing=0 border=0 width="100%"><thead>
+<tr>
+<td width="5%">id</td>
+<td >Emp</td>
+<td>Date</td>
+<td>time</td>
+<td>Ledes code</td>
+<td width="5%">Internal</td>
+<td width="5%">Billing</td>
+<td width="5%">No Charge</td>
+<td width="5%">Show</td>
+</tr></thead><tbody>
+</tr>
+</thead><tbody>
+[% list %]
+</tbody></table>
+<BR>
+<input type='submit' value='Update'>
+<BR>
+<BR>
+[% list2 %]
+<BR>
+<input type='submit' value='LEDES Update'>
+</form>
+<hr>
+<table cellpadding=5>
+ <tr>
+  <td>Legal Services[%IF flat_fee %] (flat fee)[%END %]</td>
+  <td> 
+ [% IF case.billing_currency == 'English (USD)' || case.billing_currency == 'English (EUR)' %]
+   [% currency2 %]
+   [% IF flat_fee_foreign >0  %]
+     [% flat_fee_foreign %]
+   [% ELSE %]
+     [% foreign_legal2 %]
+   [% END %]
+ [% ELSE %] 
+   NTD 
+   [% IF flat_fee %]
+    [% flat_fee %]
+   [% ELSE %]
+    [% legal_services %] 
+   [% END %]
+ [% END %]
+ </td>
+ </tr>
+ <tr>
+  <td>Disbursements </td>
+ [% IF case.billing_currency == 'English (USD)' || case.billing_currency == 'English (EUR)' %]
+   <td>
+   [% currency2 %]
+   [% foreign_disbs2 %]
+   </td> 
+ [% ELSE %] 
+   <td>NTD [% disbs %] </td>
+ [% END %] 
+ </tr>
+ <tr>
+  <td>Total</td>
+  <td>
+  [% IF case.billing_currency == 'English (USD)' || case.billing_currency == 'English (EUR)' %]
+   [% currency2 %]
+   [% foreign_total2 %]
+  [% ELSE %] 
+    NTD [% total %]
+  [% END %] 
+  </td>
+</tr>
+</table>
+[% fee_earner_table   %]
+<p>
+</body>
+</html>
+

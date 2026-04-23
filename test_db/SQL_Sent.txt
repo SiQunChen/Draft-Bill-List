@@ -1,0 +1,276 @@
+
+
+
+
+   if ($params->{bill_list_submit} ne 'Apply Sent Date') {
+### add OC invoices expect
+     my $oc_invoice='invoice_exp_status_'.$id;
+     if ($invoice_exp_status ==1 || $params->{$oc_invoice} ==1 ) {
+       $sql = qq{UPDATE tr
+                 SET invoice_exp_status = '1'
+                 WHERE id IN (SELECT id FROM tr WHERE deb_num='$deb_num' ORDER BY id limit 1)};
+       my $sth = $dbh->prepare($sql);
+       my $rv =  $sth->execute;
+#   unless ($rv == 1) {die "Something went wrong with
+#                           the update: $rv rows were affected"}
+     } elsif ($invoice_exp_status == 2 || $params->{$oc_invoice} ==2 ) {
+       $sql = qq{UPDATE tr
+                 SET invoice_exp_status = '0'
+                 WHERE deb_num='$deb_num' };
+       my $sth = $dbh->prepare($sql);
+       $sth->execute || {die "Something went wrong with the update fail"};
+     }
+
+
+
+     $sql = qq{UPDATE bills
+               SET ati_cate1 = '$params->{$ati1}',
+               ati_cate2 = '$params->{$ati2}',
+               ati_cate12 = '$params->{$ati12}',
+               ati_cate22 = '$params->{$ati22}',
+               ati_cate13 = '$params->{$ati13}',
+               ati_cate23 = '$params->{$ati23}',
+               new_matter = '$params->{$new_matter}',
+               new_matter2 = '$params->{$new_matter2}',
+               new_matter3 = '$params->{$new_matter3}',
+               project_owner = '$params->{$project_owner}',
+               class_count = '$params->{$class_count}',
+               azn_budget_status = '$params->{$azn_budget_status}'
+               WHERE id = $id};
+
+
+### add PPP OC  => Start
+     if ($pppoc_add ==1 ) {
+       $sql = qq{UPDATE cases
+                 SET pppoc_status = '1'
+                 WHERE case_num='$case_num'};
+       my $sth = $dbh->prepare($sql);
+       my $rv =  $sth->execute;
+       $sth->execute || {die "Something went wrong with the update cases table fail"};
+     }
+     if ($pppoc_cancel ==1 ) {
+       $sql = qq{UPDATE cases
+                 SET pppoc_status = '0'
+                 WHERE case_num='$case_num'};
+       my $sth = $dbh->prepare($sql);
+       my $rv =  $sth->execute;
+       $sth->execute || {die "Something went wrong with the update cases table fail"};
+     }
+
+### add PPP OC => end
+
+
+     if (defined($discount)) {
+       $sql = qq{UPDATE bills
+                 SET discount = $params->{discount}
+                 WHERE id = $id};
+       my $sth = $dbh->prepare($sql);
+       my $rv =  $sth->execute;
+       unless ($rv == 1) {die "Something went wrong with
+                             the update: $rv rows were affected"}
+     }
+     if ($retainer_amount >=0 && defined($retainer_amount) ) {
+       $sql = qq{UPDATE bills
+                 SET retainer_amount = '$retainer_amount'
+                 WHERE id = $id};
+       my $sth = $dbh->prepare($sql);
+       my $rv =  $sth->execute;
+       unless ($rv == 1) {die "Update retainer_amount,Something went wrong with
+                             the update: $rv rows were affected"}
+
+     }
+
+
+取得 retainer_num 這部分你可能可以從壓 sent 那個畫面帶過來
+### get cases table retainer_num
+     my $sql = qq [SELECT cases.retainer_num FROM bills LEFT JOIN cases ON (bills.case_num=cases.case_num ) WHERE bills.id = '$id'];
+     my $sth = $dbh->prepare($sql);
+     $sth->execute;
+     my $cases_data2 = $sth->fetchrow_hashref;
+     $sth->finish;
+     my $bills_retainer_num=$cases_data2->{retainer_num};
+
+
+$sql = qq{UPDATE bills
+               SET sent = '$params->{sent_date}',original_legal_services='$bill->{legal_services}',bills_retainer_num='$bills_retainer_num'
+			   ,party_en_name_bills='$cases_data->{party_en_name_billing}'
+
+
+### Insert bills_current_sent table data
+     my $addr = $ENV{'REMOTE_ADDR'};
+     $sql = qq{INSERT INTO bills_current_sent(deb_num,sent_ip_address) values('$bill->{deb_num}','$addr' )};
+     my $sth = $dbh->prepare($sql);
+     my $rv =  $sth->execute;
+     unless ($rv == 1) {die "Insert bills_current_sent table fail: $sql $rv rows were affected"; }
+
+### 20230820 add insert data to send_email table
+#     if ( $cases_data ->{retainer_foreign} >0 || $cases_data ->{retainer_ntd} >0 || $cases_data ->{retainer_case_num} ne ''   ) {
+     if ( $retainer_amount >0 ) {
+       $sql = qq{INSERT INTO send_email(case_num,deb_num) values('$bill->{case_num}','$bill->{deb_num}' )};
+       my $sth = $dbh->prepare($sql);
+       my $rv =  $sth->execute;
+       unless ($rv == 1) {die "Insert send_email table fail: $sql $rv rows were affected"; }
+     }
+
+
+###  ADD rainmakers_his
+
+
+### Write retainer_his and retainer_total table
+     update_retainer ($retainer_year,$retainer_quarter,$retainer_num,$bills,$dbh);
+
+
+### Insert rainmakers data to rainmakers_his
+     my $sql="SELECT bills.case_num,deb_num,sent,initials,share,rain_type  FROM bills LEFT JOIN rainmakers ON ( bills.case_num=rainmakers.case_num )  WHERE deb_num='$deb_num' ORDER BY sent,bills.case_num,rain_type,rainmakers.id";
+
+     my $sth=$dbh->prepare($sql);
+     $sth->execute;
+
+     while ( my $tr = $sth->fetchrow_hashref ) {
+       my $sql2;
+       if ( $tr->{rain_type} ne '') {
+         $sql2="SELECT * FROM rainmakers_his WHERE rainmakers_his_deb_num='$tr->{deb_num}' AND rainmakers_his_initials='$tr->{initials}' AND  rainmakers_his_rain_type='$tr->{rain_type}'  ";
+       } else {
+         $sql2="SELECT * FROM rainmakers_his WHERE rainmakers_his_deb_num='$tr->{deb_num}' AND rainmakers_his_initials='$tr->{initials}' AND ( rainmakers_his_rain_type='$tr->{rain_type}' OR rainmakers_his_rain_type IS NULL  ) ";
+       }
+       my $sth2=$dbh->prepare($sql2);
+       $sth2->execute;
+
+       my $tmp=$sth2->rows ;
+       if ( $sth2->rows ==0) {
+         my $sql3="INSERT INTO rainmakers_his(rainmakers_his_deb_num,rainmakers_his_initials,rainmakers_his_share,rainmakers_his_rain_type) VALUES ('$tr->{deb_num}','$tr->{initials}','$tr->{share}','$tr->{rain_type}') ";
+#         print "$sql3\n";
+         my $sth3=$dbh->prepare($sql3);
+         $sth3->execute;
+       }
+     }
+
+
+### 不用處理 tr and disbursements billed_flag = 1 的動作，在 Postgresql 的 script 已經寫了
+
+### payments 台幣
+
+1. case_num => 放壓 sent date 那一筆 bills table 的 case_num
+2. deb_num => 放壓 sent date 那一筆 bills table 的 deb_num
+3. rec_date => 與 Sent date 同一天
+4. rec_ntd => 放扣抵金額的金額（有可能是全抵，有可能是部分） ，帶在 Draft bill list 畫面中 抵扣的金額，請參考 client_payments table 資料
+5. method => 放 client_pay_history 被抵扣金額中的 payment_method
+6. notes =>  放 client_pay_history 的 record_date 加上一個空格再放 被抵扣的案號 client_pay_history 的 case_num 加上一個空格再放 預收款沖抵帳單 這寫字
+7. legal_services => 放 bills table 的 legal_services （有可能是全抵，有可能是部分），應該參考  client_payments table 才對
+8. disbs => 放 bills table 的 disbs （有可能是全抵，有可能是部分），應該參考  client_payments table 才對
+9. rec_usd => 放 bills table 的 usd_total （有可能是全抵，有可能是部分，如果是部分應該需要 rec_ntd/ bills table 的  x_rate ）
+10.rec_x_rate => 放 client_pay_history table 的  rate
+11.voucher_date =>  放 client_pay_history 的 record_date
+12.date_bank  =>  放被抵扣的案號 client_pay_history 的  record_date
+13.remit 是系統產生的，請參考下面 sub get_check_remit 
+
+14.sub_retainer_ntd =>  放抵扣的金額，要是負數
+15.currency => USD
+16.bank_account => 放 client_pay_history 被抵扣金額中的 bank_account
+17.rec_other_rate => 放 bills table 的  x_rate
+18.foreign_amount => 放 bills table 的 usd_total （有可能是全抵，有可能是部分，如果是部分應該需要 legal_services/ bills table 的  x_rate ）
+19.bills_currency => USD
+
+
+
+sub get_check_remit {
+    my $method = shift;
+    my $current_year = shift;
+    my $cr;
+    my $cr_num;
+    my $sql;
+    if ($method eq 'A' || $method eq 'C')
+    {
+         $cr='C';
+    }
+
+    if ($method eq 'B' || $method eq 'D' || $method eq 'E' || $method eq 'F'  || $method eq 'G')
+    {
+       $cr='R';
+    }
+    if ($cr eq 'C')
+    {
+       $sql = qq[SELECT check_num AS cr_num FROM  payments WHERE check_num LIKE 'C%' and rec_date >= '$current_year-01-01' AND rec_date <= '$current_year-12-31'   order by check_num desc];
+    } else {
+       $sql = qq[SELECT remit_num AS cr_num FROM payments WHERE remit_num LIKE 'R%' and rec_date >= '$current_year-01-01' AND rec_date <= '$current_year-12-31' order by remit_num desc];
+    }
+    my $dbh = HR::DBConnect();
+    my $sth = $dbh->prepare ($sql);
+    $sth->execute;
+    my $payments_result = $sth->fetchrow_hashref;
+    $cr_num = $payments_result->{cr_num};
+    if ($cr eq 'C')
+    {
+       $cr_num =~ s/^C0*//;
+    } else {
+       $cr_num =~ s/^R0*//;
+    }
+    $cr_num++;
+    if ( $cr_num >= 1000 )
+    {
+       $cr_num = $cr.$cr_num;
+    } elsif ( $cr_num >=100 && $cr_num < 1000 ) {
+       $cr_num = $cr.'0'.$cr_num;
+    } elsif ( $cr_num >=10 && $cr_num < 100 ) {
+       $cr_num = $cr.'00'.$cr_num;
+    } elsif ( $cr_num >=1 && $cr_num < 10 ) {
+       $cr_num = $cr.'000'.$cr_num;
+    }
+
+return $cr_num;
+
+}
+
+
+### disbs_payments 每一筆代墊抵扣後要寫入的資料 =>台幣
+
+INSERT INTO disbs_payments (disbs_ref_id,payments_ref_id,case_num,deb_num,date,payment_date,voucher_date,disb_code,disb_name,amount,pay_amount,bpm_rownum) values('$disbs->{id}','$payments_id','$params->{case_num}','$params->{deb_num}','$disbs->{date}','$params->{rec_date}','$params->{voucher_date}','$disbs->{disb_code}','$disbs->{disb_name}','$disbs->{ntd_amount}','$disb_value','$bpm_rownum')
+
+1. disbs_ref_id => 放 disbursements table 的 id 欄位值
+2. payments_ref_id => 放 payments table 的 id 欄位值
+3. case_num => 放案號
+4. deb_num => 放帳單號碼
+5. date  => 放 disbursements table 的 date 欄位值
+6. payment_date => 放 payments table 的 rec_date 欄位值（上面提到rec_date是與 Sent date 同一天）
+7. voucher_date => 放 payments table 的 voucher_date 欄位值(上面提到是 voucher_date 是放 client_pay_history 的 record_date) 
+8. disb_code => 放 disbursements table 的 disb_code 欄位值
+9. disb_name => 放 disbursements table 的 disb_name 欄位值
+10. amount => 放 disbursements table 的 ntd_amount 欄位值
+11. pay_amount => 放實際消帳的金額，請參考 client_payments table
+12. bpm_rownum => 放 disbursements table 的 bpm_rownum 欄位值 * -1
+
+
+
+### payments 外幣   要注意或不同的地方    A2025120736
+如果 bills table 的  billing_currency == 'English (USD)' || $billing_currency == 'English (EUR)'
+且 receipt 的 currency 也是相同外幣
+
+
+1. rec_ntd => 放扣抵金額的金額（有可能是全抵，有可能是部分 ，這部分要注意是如果部分消帳的外幣 ＊ rec_x_rate  ） 
+2. rec_usd => 放 bills table 的 usd_total （有可能是全抵，有可能是部分，如果是部分應該需要 rec_ntd/ bills table 的  x_rate ）
+3. sub_retainer  =>  放抵扣的外幣金額，要是負數
+4. sub_retainer_ntd   =>  sub_retainer * rec_x_rate，要是負數
+5.currency =>放消帳的幣別，所以應該是 client_pay_history table 的 currency 欄位
+6.foreign_amount => 放 bills table 的 foreign_total2 （有可能是全抵，有可能是部分 ），應該參考  client_payments table 才對
+7.bills_currency => 放 bills table 的 currency2
+8. exchange_gain_loss => 如下：
+### 20240726 modify Exchanged Gain(Loss)
+  if ( $params->{method} eq 'A' || $params->{method} eq 'B' || ( ($params->{method} eq 'C' || $params->{method} eq 'D' ||  $params->{method} eq 'E'  || $params->{method} eq 'G') && ( $params->{rec_other_rate}  != $params->{rec_x_rate} ) ) ) {
+    $params->{exchange_gain_loss} = ( $params->{foreign_amount} - $params->{foreign_discount_fee} ) * $params->{rec_x_rate} + $params->{ntd_discount_fee} - $params->{legal_services} - $params->{disbs} ;
+
+9. foreign_discount_fee => 通常是 0
+
+9. ntd_discount_fee  => 通常是 0
+
+9. rec_bank = (Received Exchange Rate)  rec_x_rate * foreign_amount
+
+
+
+
+
+
+
+
+
+
+
