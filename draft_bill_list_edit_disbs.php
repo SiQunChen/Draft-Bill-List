@@ -57,14 +57,9 @@ try {
                 <tbody>
                     <?php foreach ($disbursements as $disb): ?>
                         <?php
-                        if ($disb['check_bills'] == 1) {
-                            continue;
-                        }
-
                         $rowBg = ($disb['show_flag'] == 1) ? 'background-color: #BBBBBB;' : '';
                         $noChargeChecked = ($disb['show_flag'] == -1) ? 'checked' : '';
                         $legalServiceChecked = ($disb['show_as_legal_service_flag'] == 1) ? 'checked' : '';
-                        $removeDisabled = (!empty($disb['bpm_rownum']) && !empty($disb['bpm_appnum'])) ? 'disabled title="已關聯 BPM，無法移除"' : '';
                         ?>
                         <tr style="<?php echo $rowBg; ?>">
                             <td>
@@ -107,7 +102,7 @@ try {
                                     <input type="checkbox" class="disb-legal-service" <?php echo $legalServiceChecked; ?> onclick="keepcount(this)"> Legal service
                                 </label>
                                 <label class="checkbox-inline">
-                                    <input type="checkbox" class="disb-remove" <?php echo $removeDisabled; ?>> Remove
+                                    <input type="checkbox" class="disb-remove"> Remove
                                 </label>
                             </td>
                         </tr>
@@ -188,7 +183,7 @@ try {
                     narrative: narrative,
                     show_flag: isNoCharge ? 1 : 0,
                     show_as_legal_service_flag: isLegalService ? 1 : 0,
-                    check_bills: isRemove ? 1 : 0
+                    is_remove: isRemove ? 1 : 0
                 });
             }
         });

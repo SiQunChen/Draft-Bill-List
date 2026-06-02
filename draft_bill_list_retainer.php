@@ -398,16 +398,17 @@
             // 先扣除已鎖定的金額
             retainerData.retainers.forEach(retainer => {
                 if (retainer.is_locked) {
-                    bill_total -= retainer.allocated_amount;
+                    bill_total -= parseFloat(retainer.allocated_amount) || 0;
                 }
             });
 
             // 分配給未鎖定的案件（按當前順序）
             retainerData.retainers.forEach(retainer => {
                 if (!retainer.is_locked) {
-                    if (bill_total >= retainer.remain) {
-                        retainer.allocated_amount = retainer.remain;
-                        bill_total -= retainer.remain;
+                    const remain = parseFloat(retainer.remain) || 0;
+                    if (bill_total >= remain) {
+                        retainer.allocated_amount = remain;
+                        bill_total -= remain;
                     } else if (bill_total > 0) {
                         retainer.allocated_amount = bill_total;
                         bill_total = 0;
@@ -425,7 +426,7 @@
             let total = 0;
             retainerData.retainers.forEach(retainer => {
                 if (retainer.is_locked) {
-                    total += retainer.allocated_amount;
+                    total += parseFloat(retainer.allocated_amount) || 0;
                 }
             });
 
@@ -492,6 +493,7 @@
                 payment_method: r.payment_method,
                 bank_account: r.bank_account,
                 currency: r.currency,
+                rate: r.rate,
                 fmt_remain: r.remain,
                 allocated_amount: r.allocated_amount,
                 is_locked: r.is_locked

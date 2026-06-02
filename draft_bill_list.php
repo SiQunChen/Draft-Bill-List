@@ -438,11 +438,12 @@
                                     }
 
                                     // 按鈕
+                                    $bill_total = ($currency_label === 'TWD') ? $row['total'] : $row['foreign_total2'];
                                     $retainer_html .= "<button type='button' class='btn btn-sm btn-info'
                                                             data-toggle='modal' data-target='#retainerModal' 
                                                             data-bills-case-num='{$row['case_num']}'
                                                             data-deb-num='{$deb_num}'
-                                                            data-total='{$row['total']}'
+                                                            data-total='{$bill_total}'
                                                             data-retainer-case='{$row['retainer_case_num']}'
                                                             data-retainer-amount='{$retainer_amount}'
                                                             data-retainer-currency='{$retainer_currency}'

@@ -341,6 +341,7 @@ try {
                 $bill_total = floatval($bill['total'] ?? 0);
                 $bill_usd_total = floatval($bill['usd_total'] ?? 0);
                 $bill_x_rate = floatval($bill['x_rate'] ?? 0);
+                $bill_x_rate2 = floatval($bill['x_rate2'] ?? 0);
                 $bill_foreign_total2 = floatval($bill['foreign_total2'] ?? 0);
                 $bill_currency2 = $bill['currency2'] ?? '';
 
@@ -395,7 +396,7 @@ try {
                 // =========================================================
                 if ($is_both_foreign) {
                     // 外幣：可用抵扣金額以台幣計算
-                    $available = $cph_twd_amount > 0 ? $cph_twd_amount : ($cph_foreign_amount * $bill_x_rate);
+                    $available = $cph_twd_amount > 0 ? $cph_twd_amount : ($cph_foreign_amount * $bill_x_rate2);
                 } else {
                     // 台幣：可用抵扣金額
                     $available = $cph_twd_amount;
@@ -427,18 +428,22 @@ try {
                     // =============================================
                     // 外幣消帳邏輯
                     // =============================================
-                    $pay_rec_ntd = $cph_foreign_amount * $cph_rate;  // 外幣 * rec_x_rate
+                    $pay_rec_ntd = round($cph_foreign_amount * $cph_rate);  // 外幣 * rec_x_rate，取整寫入 integer 欄位
                     $pay_rec_usd = round($cph_foreign_amount, 2); // 可能是部分
                     $pay_method = $cph_payment_method;
                     // pay_legal_services 和 pay_disbs 已在上面計算
                     $pay_rec_x_rate = $cph_rate;
                     $pay_sub_retainer = -1 * $cph_foreign_amount;  // 負數
-                    $pay_sub_retainer_ntd = $pay_sub_retainer * $cph_rate; // 負數
+                    $pay_sub_retainer_ntd = round($pay_sub_retainer * $cph_rate); // sub_retainer * rec_x_rate，負數，取整
                     $pay_currency = $cph_currency;
                     $pay_bank_account = $cph_bank_account;
-                    $pay_rec_other_rate = $bill_x_rate;
+                    $pay_rec_other_rate = $bill_x_rate2;
                     $pay_foreign_amount = $cph_foreign_amount;
                     $pay_bills_currency = $bill_currency2;
+                    $pay_rec_bank = round($pay_rec_x_rate * $pay_foreign_amount);
+                    // foreign_legal / foreign_disbs => 來自 bills 外幣欄位
+                    $pay_foreign_legal  = floatval($bill['foreign_legal2'] ?? 0);
+                    $pay_foreign_disbs  = floatval($bill['foreign_disbs2'] ?? 0);
 
                     // exchange_gain_loss 計算
                     $pay_exchange_gain_loss = 0;
@@ -448,7 +453,7 @@ try {
                             $cph_payment_method == 'E' || $cph_payment_method == 'G') &&
                             ($pay_rec_other_rate != $pay_rec_x_rate))
                     ) {
-                        $pay_exchange_gain_loss = $pay_foreign_amount * $pay_rec_x_rate - $pay_legal_services - $pay_disbs;
+                        $pay_exchange_gain_loss = round($pay_foreign_amount * $pay_rec_x_rate - $pay_legal_services - $pay_disbs);
                     }
 
                     // remit / check_num
@@ -466,39 +471,48 @@ try {
                                         voucher_date, date_bank, check_num, remit_num,
                                         sub_retainer, sub_retainer_ntd, currency, bank_account,
                                         rec_other_rate, foreign_amount, bills_currency,
-                                        exchange_gain_loss
+                                        exchange_gain_loss,
+                                        with_tax, rec_bank, other_loss_gain,
+                                        sub_temp_pay, sub_temp_pay_ntd, bank_fee_dom,
+                                        foreign_legal, foreign_disbs
                                     ) VALUES (
                                         $1, $2, $3, $4, $5, $6,
                                         $7, $8, $9, $10,
                                         $11, $12, $13, $14,
                                         $15, $16, $17, $18,
                                         $19, $20, $21,
-                                        $22
+                                        $22,
+                                        0, $23, 0,
+                                        0, 0, 0,
+                                        $24, $25
                                     ) RETURNING id";
 
                     $res_ins_pay = pg_query_params($dblink, $sql_ins_pay, [
-                        $case_num,
-                        $deb_num,
-                        $sent_date,
-                        $pay_rec_ntd,
-                        $pay_method,
-                        $pay_notes,
-                        $pay_legal_services,
-                        $pay_disbs,
-                        $pay_rec_usd,
-                        $pay_rec_x_rate,
-                        $pay_voucher_date,
-                        $pay_date_bank,
-                        $pay_check_num,
-                        $pay_remit_num,
-                        $pay_sub_retainer,
-                        $pay_sub_retainer_ntd,
-                        $pay_currency,
-                        $pay_bank_account,
-                        $pay_rec_other_rate,
-                        $pay_foreign_amount,
-                        $pay_bills_currency,
-                        $pay_exchange_gain_loss
+                        $case_num,           // $1
+                        $deb_num,            // $2
+                        $sent_date,          // $3
+                        $pay_rec_ntd,        // $4
+                        $pay_method,         // $5
+                        $pay_notes,          // $6
+                        $pay_legal_services, // $7
+                        $pay_disbs,          // $8
+                        $pay_rec_usd,        // $9
+                        $pay_rec_x_rate,     // $10
+                        $pay_voucher_date,   // $11
+                        $pay_date_bank,      // $12
+                        $pay_check_num,      // $13
+                        $pay_remit_num,      // $14
+                        $pay_sub_retainer,     // $15
+                        $pay_sub_retainer_ntd, // $16
+                        $pay_currency,         // $17
+                        $pay_bank_account,     // $18
+                        $pay_rec_other_rate,   // $19
+                        $pay_foreign_amount,   // $20
+                        $pay_bills_currency,   // $21
+                        $pay_exchange_gain_loss, // $22
+                        $pay_rec_bank,         // $23
+                        $pay_foreign_legal,    // $24
+                        $pay_foreign_disbs     // $25
                     ]);
                 } else {
                     // =============================================
@@ -531,37 +545,41 @@ try {
                                         voucher_date, date_bank, check_num, remit_num,
                                         sub_retainer_ntd, currency, bank_account,
                                         rec_other_rate, foreign_amount, bills_currency,
-                                        exchange_gain_loss
+                                        exchange_gain_loss,
+                                        with_tax, rec_bank, other_loss_gain,
+                                        sub_retainer, sub_temp_pay, sub_temp_pay_ntd, bank_fee_dom
                                     ) VALUES (
                                         $1, $2, $3, $4, $5, $6,
                                         $7, $8, $9, $10,
                                         $11, $12, $13, $14,
                                         $15, $16, $17,
                                         $18, $19, $20,
-                                        0
+                                        0,
+                                        0, 0, 0,
+                                        0, 0, 0, 0
                                     ) RETURNING id";
 
                     $res_ins_pay = pg_query_params($dblink, $sql_ins_pay, [
-                        $case_num,
-                        $deb_num,
-                        $sent_date,
-                        $pay_rec_ntd,
-                        $pay_method,
-                        $pay_notes,
-                        $pay_legal_services,
-                        $pay_disbs,
-                        $pay_rec_usd,
-                        $pay_rec_x_rate,
-                        $pay_voucher_date,
-                        $pay_date_bank,
-                        $pay_check_num,
-                        $pay_remit_num,
-                        $pay_sub_retainer_ntd,
-                        $pay_currency,
-                        $pay_bank_account,
-                        $pay_rec_other_rate,
-                        $pay_foreign_amount,
-                        $pay_bills_currency
+                        $case_num,           // $1
+                        $deb_num,            // $2
+                        $sent_date,          // $3
+                        $pay_rec_ntd,        // $4
+                        $pay_method,         // $5
+                        $pay_notes,          // $6
+                        $pay_legal_services, // $7
+                        $pay_disbs,          // $8
+                        $pay_rec_usd,        // $9
+                        $pay_rec_x_rate,     // $10
+                        $pay_voucher_date,   // $11
+                        $pay_date_bank,      // $12
+                        $pay_check_num,      // $13
+                        $pay_remit_num,      // $14
+                        $pay_sub_retainer_ntd, // $15
+                        $pay_currency,         // $16
+                        $pay_bank_account,     // $17
+                        $pay_rec_other_rate,   // $18
+                        $pay_foreign_amount,   // $19
+                        $pay_bills_currency    // $20
                     ]);
                 }
 

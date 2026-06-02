@@ -72,6 +72,7 @@ function getRetainers($retainer_case_num, $bills_case_num, $currency) {
                             currency,
                             remain_twd_amount,
                             remain_foreign_amount,
+                            rate,
                             record_date
                         FROM client_pay_history 
                         WHERE payment_type = 'Retainer'
@@ -119,6 +120,7 @@ function getRetainers($retainer_case_num, $bills_case_num, $currency) {
                 'payment_method' => $row['payment_method'],
                 'bank_account' => $row['bank_account'],
                 'currency' => $row['currency'],
+                'rate' => $row['rate'],
                 'remain' => $remain,
                 'fmt_remain' => $fmt_remain,
                 'date' => $row['record_date'],
@@ -170,6 +172,7 @@ function saveAllocation($retainers) {
             $bank_account = $retainer['bank_account'] ?? '';
             $currency = $retainer['currency'] ?? 'TWD';
             $allocated_amount = floatval($retainer['allocated_amount'] ?? 0);
+            $rate = floatval($retainer['rate'] ?? 1);
             $relation_id = $retainer['id'] ?? null;
             $is_locked = $retainer['is_locked'] ?? false;
             $record_date = date('Y-m-d');
@@ -272,7 +275,7 @@ function saveAllocation($retainers) {
                 // 3. 更新抵扣紀錄
                 $update_history_sql = "UPDATE client_pay_history 
                                        SET foreign_amount = $1, 
-                                           twd_amount = $2 
+                                           twd_amount = $2
                                        WHERE id = $3";
                 $update_result = pg_query_params($dblink, $update_history_sql, [
                     $foreign_amount,
@@ -317,13 +320,14 @@ function saveAllocation($retainers) {
                                 currency,
                                 foreign_amount,
                                 twd_amount,
+                                rate,
                                 relation_id,
                                 record_date,
                                 income_status,
                                 initials,
                                 status
                             ) VALUES (
-                                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
+                                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
                             )";
 
             $insert_params = [
@@ -337,6 +341,7 @@ function saveAllocation($retainers) {
                 $currency,
                 $foreign_amount,
                 $twd_amount,
+                $rate,
                 $relation_id,
                 $record_date,
                 0,

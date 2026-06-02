@@ -97,11 +97,22 @@ function updateBill($postData) {
         while ($row = pg_fetch_assoc($res_disbs)) {
             $disb_id = $row['id'];
 
-            // A. 移除 (從帳單中剔除，設 deb_num = NULL, billed_flag = -1)
+            // A. 移除 (從帳單中剔除，設 deb_num = NULL, billed_flag = -1, check_bills = 0，並重置其他 flags)
             if (in_array($disb_id, $remove_ids)) {
-                $sql_remove = "UPDATE disbursements SET deb_num = NULL, billed_flag = -1 WHERE id = $1";
-                pg_query_params($dblink, $sql_remove, [$disb_id]);
-                continue; // 已移除，不需更新後續欄位
+                $updates_remove = [
+                    'deb_num'                    => null,
+                    'billed_flag'                => -1,
+                    'check_bills'                => 0,
+                    'nocharge_flag'              => -1,
+                    'show_flag'                  => 1,
+                    'show_as_legal_service_flag' => -1,
+                ];
+                if (isset($postData["ledes_code_{$disb_id}"])) {
+                    $updates_remove['dis_ledes_code'] = $postData["ledes_code_{$disb_id}"];
+                }
+                pg_update($dblink, 'disbursements', $updates_remove, ['id' => $disb_id]);
+
+                continue;  // 移除後跳過其他更新
             }
 
             // B. 更新其他欄位

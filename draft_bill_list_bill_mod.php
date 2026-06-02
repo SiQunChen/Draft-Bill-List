@@ -119,11 +119,10 @@ try {
                     <tbody>
                         <?php foreach ($disbursements as $row) :
                             $disb_id = $row['id'];
-                            $removeDisabled = (!empty($row['bpm_rownum']) && !empty($row['bpm_appnum'])) ? 'disabled title="已關聯 BPM，無法移除"' : '';
                         ?>
                             <tr>
                                 <td class="text-center">
-                                    <input type="checkbox" name="remove_id[]" value="<?php echo $disb_id; ?>" <?php echo $removeDisabled; ?>>
+                                    <input type="checkbox" name="remove_id[]" value="<?php echo $disb_id; ?>">
                                 </td>
                                 <td class="text-center">
                                     <input type="checkbox" name="nocharge_id[]" value="<?php echo $disb_id; ?>" <?php echo $row['nocharge_flag'] == 1 ? 'checked' : ''; ?>>

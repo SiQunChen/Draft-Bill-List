@@ -154,7 +154,7 @@ function updateDisbursements($postData) {
             $date = $data['date'] ?? '';
             $initials = $data['initials'] ?? '';
             $narrative = $data['narrative'] ?? '';
-            $check_bills = !empty($data['check_bills']) ? 1 : 0;
+            $is_remove = $data['is_remove'] ?? 0;
 
             // No Charge 邏輯
             // 前端傳送 show_flag = 1 表示 No charge 被勾選 (對應 isset($postData['show_flag']))
@@ -174,7 +174,7 @@ function updateDisbursements($postData) {
 
             // deb_num 處理 & Remove 邏輯
             $current_deb_num = $data['deb_num'] ?? $group_deb_num;
-            if ($check_bills == 1) {
+            if ($is_remove == 1) {
                 // Remove: 1. deb_num 改為 null, 2. billed_flag 改為 -1
                 $deb_num_update = null;
                 $billed_flag = -1;
@@ -194,9 +194,9 @@ function updateDisbursements($postData) {
                            nocharge_flag = $5,
                            billed_flag = $6,
                            show_as_legal_service_flag = $7,
-                           check_bills = $8,
-                           deb_num = $9
-                           WHERE id = $10";
+                           check_bills = 0,
+                           deb_num = $8
+                           WHERE id = $9";
 
             $res = pg_query_params($dblink, $sql_update, [
                 $date,
@@ -206,7 +206,6 @@ function updateDisbursements($postData) {
                 $nocharge_flag,
                 $billed_flag,
                 $show_as_legal_service_flag,
-                $check_bills,
                 $deb_num_update,
                 $id
             ]);
