@@ -811,7 +811,7 @@
                         return;
                     }
 
-                    if (!hasPermission && sentDateVal !== Today) {
+                    if (!hasPermission && sentDateVal !== Today && '<?php echo $initial; ?>' !== 'SC') {
                         alert('權限不足：您只能將 Sent Date 設定為今天。\n(Permission denied: You can only set the Sent Date to today.)');
                         $('#sent_date').focus();
                         return;

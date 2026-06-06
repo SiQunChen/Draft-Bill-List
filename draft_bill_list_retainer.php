@@ -194,7 +194,7 @@
             // 取得帳單資訊
             billsCaseNum = button.data('bills-case-num');
             debNum = button.data('deb-num');
-            billTotal = button.data('total');
+            billTotal = parseFloat(button.data('total')) || 0;
 
             // 取得預收款資訊
             const retainerCaseNum = button.data('retainer-case');
@@ -298,10 +298,10 @@
                     <td class="text-center">${retainer.date || '-'}</td>
                     <td class="text-right">${retainer.fmt_remain} ${retainer.currency}</td>
                     <td>
-                        <input type="number" class="form-control allocation-input" 
+                        <input type="text" inputmode="decimal" class="form-control allocation-input" 
                                data-index="${index}" 
-                               value="${retainer.allocated_amount}" 
-                               min="0" step="${retainer.currency === 'TWD' ? 1 : 0.01}" ${readonly}>
+                               value="${formatAllocationDisplay(retainer.allocated_amount, retainer.currency)}" 
+                               ${readonly}>
                     </td>
                 </tr>
             `;
@@ -310,6 +310,17 @@
 
             updateTotals();
         }
+
+        // 將金額數值格式化為帶千分位的字串（供 input 顯示用）
+        function formatAllocationDisplay(value, currency) {
+            const num = parseFloat(value) || 0;
+            if (currency === 'TWD') {
+                return num.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+            } else {
+                return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            }
+        }
+
 
         // 排序按鈕
         $(document).on('click', '.btn-sort', function() {
@@ -383,12 +394,27 @@
             }
         }
 
-        // 金額輸入變更
-        $(document).on('change', '.allocation-input', function() {
+        // 金額輸入變更（即時更新）
+        $(document).on('input', '.allocation-input', function() {
             const index = $(this).data('index');
-            const value = parseFloat($(this).val()) || 0;
+            const raw = $(this).val().replace(/,/g, '');
+            const value = parseFloat(raw) || 0;
             retainerData.retainers[index].allocated_amount = value;
             updateTotals();
+        });
+
+        // 聚焦時還原純數字，方便編輯
+        $(document).on('focus', '.allocation-input', function() {
+            const raw = $(this).val().replace(/,/g, '');
+            $(this).val(raw === '0' ? '' : raw);
+        });
+
+        // 失焦時重新加上千分位格式
+        $(document).on('blur', '.allocation-input', function() {
+            const index = $(this).data('index');
+            const currency = retainerData.retainers[index].currency;
+            const value = retainerData.retainers[index].allocated_amount;
+            $(this).val(formatAllocationDisplay(value, currency));
         });
 
         // Auto-Distribute 按鈕
