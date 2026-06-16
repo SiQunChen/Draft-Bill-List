@@ -186,6 +186,9 @@ function saveAllocation($retainers) {
                 $twd_amount = 0;
             }
 
+            // 計算外幣對應台幣金額（四捨五入到整數）
+            $for_twd_amount = (int) round($foreign_amount * $rate);
+
             // --- 檢查是否已存在 ---
             $check_sql = "SELECT id, twd_amount, foreign_amount FROM client_pay_history
                           WHERE case_num = $1 
@@ -275,12 +278,14 @@ function saveAllocation($retainers) {
                 // 3. 更新抵扣紀錄
                 $update_history_sql = "UPDATE client_pay_history 
                                        SET foreign_amount = $1, 
-                                           twd_amount = $2
+                                           twd_amount = $2,
+                                           for_twd_amount = $4
                                        WHERE id = $3";
                 $update_result = pg_query_params($dblink, $update_history_sql, [
                     $foreign_amount,
                     $twd_amount,
-                    $existing_id
+                    $existing_id,
+                    $for_twd_amount
                 ]);
 
                 if (!$update_result) {
@@ -320,6 +325,7 @@ function saveAllocation($retainers) {
                                 currency,
                                 foreign_amount,
                                 twd_amount,
+                                for_twd_amount,
                                 rate,
                                 relation_id,
                                 record_date,
@@ -327,7 +333,7 @@ function saveAllocation($retainers) {
                                 initials,
                                 status
                             ) VALUES (
-                                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
+                                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
                             )";
 
             $insert_params = [
@@ -341,6 +347,7 @@ function saveAllocation($retainers) {
                 $currency,
                 $foreign_amount,
                 $twd_amount,
+                $for_twd_amount,
                 $rate,
                 $relation_id,
                 $record_date,

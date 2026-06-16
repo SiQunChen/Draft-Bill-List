@@ -498,7 +498,7 @@ try {
                         $pay_legal_services, // $7
                         $pay_disbs,          // $8
                         $pay_rec_usd,        // $9
-                        $pay_rec_x_rate,     // $10
+                        number_format($pay_rec_x_rate, 2, '.', ''),     // $10
                         $sent_date,          // $11
                         $pay_date_bank,      // $12
                         $pay_check_num,      // $13
@@ -569,7 +569,7 @@ try {
                         $pay_legal_services, // $7
                         $pay_disbs,          // $8
                         $pay_rec_usd,        // $9
-                        $pay_rec_x_rate,     // $10
+                        number_format($pay_rec_x_rate, 2, '.', ''),     // $10
                         $sent_date,   // $11
                         $pay_date_bank,      // $12
                         $pay_check_num,      // $13
