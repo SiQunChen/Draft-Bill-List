@@ -4,6 +4,7 @@
  * Disbursements Modal 內容
  * 用於 draft_bill_list_edit.php 的 Disbursements 編輯視窗
  */
+require_once __DIR__ . "/require_auth.php";
 require_once('test_db/draft_bill_list_edit_disbs_db.php');
 
 $case_num = $_GET['case_num'] ?? '';

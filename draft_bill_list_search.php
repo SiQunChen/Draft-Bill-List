@@ -40,6 +40,8 @@
             <hr style="border-color: #345a6c">
 
             <form id="action-form" method="POST" action="test_db/draft_bill_list_action_db.php" role="form">
+                <input type="hidden" name="return_url" value="<?php echo htmlspecialchars($return_path); ?>">
+                
                 <!-- Sent Date -->
                 <div class="form-group">
                     <label for="sent_date" class="col-half">Sent Date</label>

@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . "/require_auth.php";
 require_once('test_db/draft_bill_list_bill_mod_db.php');
 
 $id = $_GET['id'] ?? $_POST['bill_id'] ?? '';

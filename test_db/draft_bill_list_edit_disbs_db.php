@@ -4,7 +4,7 @@
  * Disbursements 後端 API
  * 處理 Draft Bill Edit 頁面的 Disbursements Modal 功能
  */
-require_once("db23.ini");
+require_once(__DIR__ . '/../db23.php');
 
 /**
  * 讀取 Disbursements 清單

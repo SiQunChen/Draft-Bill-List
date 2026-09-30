@@ -11,7 +11,7 @@ if (session_status() == PHP_SESSION_NONE) {
     session_set_cookie_params(86400);
     session_start();
 }
-require("db23.ini");
+require(__DIR__ . '/../db23.php');
 
 function beginEnter() {
     $date = ('Y-m-d');

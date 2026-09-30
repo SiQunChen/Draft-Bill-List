@@ -7,7 +7,7 @@ ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
-require_once("db23.ini");
+require_once(__DIR__ . '/../db23.php');
 
 // 建立資料庫連接
 $dblink = @pg_connect(DB_CONNECT23);
@@ -36,6 +36,7 @@ if (isset($_POST['update'])) {
 $sent_date = isset($_POST['sent_date']) ? trim($_POST['sent_date']) : '';
 $discount_global = isset($_POST['discount']) ? trim($_POST['discount']) : ''; // 全域折扣輸入
 $ids = isset($_POST['row_check_box']) ? $_POST['row_check_box'] : [];
+$return_url = $_POST['return_url'] ?? '../draft_bill_list.php';
 
 // [修正 1] 取得 OC Invoice 全域設定 (配合前端 name="oc_invoice")
 // 值可能為 'expected' 或 'cancel'
@@ -181,7 +182,7 @@ try {
         }
 
         pg_query($dblink, "COMMIT");
-        echo "<script>alert('草稿已更新 (Updated)'); window.location.href = document.referrer;</script>";
+        echo "<script>alert('草稿已更新 (Updated)'); window.location.href = " . json_encode($return_url) . ";</script>";
     }
 
     // ---------------------------------------------------------
@@ -216,7 +217,7 @@ try {
             // 該 trigger 會將 disbursements.billed_flag 設為 1，
             // 導致後續查詢 billed_flag = 0 時找不到資料
             // =========================================================
-            $sql_disbs_pre = "SELECT id, date, disb_code, disb_name, ntd_amount, bpm_rownum
+            $sql_disbs_pre = "SELECT id, date, disb_code, disb_name, ntd_amount, x_rate, foreign_amount, bpm_rownum
                               FROM disbursements
                               WHERE deb_num = $1
                               AND billed_flag = 0
@@ -327,15 +328,50 @@ try {
 
             // =========================================================
             // 8. Payments + Disbs_Payments 寫入 (預收款抵扣消帳)
-            //    先扣 disbs（按 disb_code 優先順序），剩餘再扣 services
+            //
+            //    同一張帳單可能有多筆 client_pay_history (Applied) 要依序消帳，
+            //    所以下面 while 迴圈外先初始化 disbs / legal_services 的「剩餘可扣額度」
+            //    ($disbs_state / $legal_remaining_*)，並在每筆 cph 消帳後遞減，
+            //    確保後面的 cph 不會重複扣同一筆 disb / legal_services。
+            //
+            //    每筆 cph 依序執行：
+            //      Step 1 分配：先扣 disbs（按剩餘額度），剩餘再扣 legal_services
+            //      Step 2 寫入 payments
+            //      Step 3 寫入 disbs_payments
+            //      Step 4 更新 Received 剩餘 / Applied 狀態 / client_pay_total 總額
             // =========================================================
+
             // 查詢 client_pay_history 中已 Applied 的抵扣紀錄
-            $sql_cph = "SELECT * FROM client_pay_history 
-                         WHERE bills_case_num = $1 
-                         AND payment_type = 'Retainer' 
-                         AND payment_status = 'Applied' 
+            $sql_cph = "SELECT * FROM client_pay_history
+                         WHERE bills_case_num = $1
+                         AND payment_type = 'Retainer'
+                         AND payment_status = 'Applied'
                          AND status = 0";
             $res_cph = pg_query_params($dblink, $sql_cph, [$case_num]);
+
+            $bill_legal_services = floatval($bill['legal_services'] ?? 0);
+            $bill_twd_total = floatval($bill['total'] ?? 0);
+            $bill_usd_total = floatval($bill['usd_total'] ?? 0);
+            $bill_x_rate = floatval($bill['x_rate'] ?? 0);
+            $bill_x_rate2 = floatval($bill['x_rate2'] ?? 0);
+            $bill_currency2 = $bill['currency2'] ?? '';
+            $bill_foreign_legal2 = floatval($bill['foreign_legal2'] ?? 0);
+
+            // 判斷帳單是否為外幣（與個別 cph 的幣別無關）
+            $billing_currency = $bill['billing_currency'] ?? '';
+            $is_foreign_bill = ($billing_currency == 'English (USD)' || $billing_currency == 'English (EUR)');
+
+            $disbs_state = init_disbs_state($disbs_rows_pre, $bill_x_rate2);
+            $legal_remaining_ntd = $bill_legal_services;
+            $legal_remaining_foreign = $bill_foreign_legal2;
+
+            $bill_ctx = [
+                'x_rate' => $bill_x_rate,
+                'x_rate2' => $bill_x_rate2,
+                'currency2' => $bill_currency2,
+                'twd_total' => $bill_twd_total,
+                'usd_total' => $bill_usd_total,
+            ];
 
             while ($cph = pg_fetch_assoc($res_cph)) {
                 $cph_twd_amount = floatval($cph['twd_amount'] ?? 0);
@@ -345,361 +381,60 @@ try {
                 $cph_bank_account = $cph['bank_account'] ?? '';
                 $cph_case_num = $cph['case_num'] ?? '';
                 $cph_rate = floatval($cph['rate'] ?? 0);
-                // 取得該筆 Applied 所對應的原始 Retainer (Received) 的 record_date
                 $cph_relation_id = $cph['relation_id'] ?? null;
-                $cph_record_date = '';
-                if ($cph_relation_id) {
-                    $sql_retainer = "SELECT record_date FROM client_pay_history
-                                     WHERE id = $1
-                                       AND payment_type = 'Retainer'
-                                       AND payment_status = 'Received'
-                                     LIMIT 1";
-                    $res_retainer = pg_query_params($dblink, $sql_retainer, [$cph_relation_id]);
-                    if ($res_retainer && pg_num_rows($res_retainer) > 0) {
-                        $row_retainer = pg_fetch_assoc($res_retainer);
-                        $cph_record_date = $row_retainer['record_date'] ?? '';
-                    }
-                }
+                // 取得該筆 Applied 所對應的原始 Retainer (Received) 的 record_date
+                $cph_record_date = fetch_retainer_record_date($dblink, $cph_relation_id);
 
-                // 判斷帳單是否為外幣
-                $billing_currency = $bill['billing_currency'] ?? '';
-                $is_foreign_bill = ($billing_currency == 'English (USD)' || $billing_currency == 'English (EUR)');
                 // 判斷抵扣的預收款是否也是相同外幣
                 $is_foreign_receipt = ($cph_currency != 'TWD');
                 $is_both_foreign = ($is_foreign_bill && $is_foreign_receipt);
 
-                // --- 組合 payments 欄位 ---
-                $bill_legal_services = floatval($bill['legal_services'] ?? 0);
-                $bill_disbs = floatval($bill['disbs'] ?? 0);
-                $bill_total = floatval($bill['total'] ?? 0);
-                $bill_usd_total = floatval($bill['usd_total'] ?? 0);
-                $bill_x_rate = floatval($bill['x_rate'] ?? 0);
-                $bill_x_rate2 = floatval($bill['x_rate2'] ?? 0);
-                $bill_foreign_total2 = floatval($bill['foreign_total2'] ?? 0);
-                $bill_currency2 = $bill['currency2'] ?? '';
-
                 // notes: record_date + 空格 + 被抵扣案號 + 空格 + "預收款沖抵帳單"
-                $pay_notes = $cph_record_date . ' ' . $cph_case_num . ' 預收款沖抵帳單';
-
+                $pay_notes = date('Y/n/j', strtotime($cph_record_date)) . ' ' . $cph_case_num . ' 預收款沖抵帳單';
                 // date_bank: 放 client_pay_history 的 record_date
                 $pay_date_bank = $cph_record_date;
 
-                // 取得當前年份用於 remit
+                // 取得當前年份用於 remit，並呼叫 get_check_remit 取得 check_num 或 remit_num
                 $current_year = date('Y', strtotime($sent_date));
-
-                // 呼叫 get_check_remit 取得 check_num 或 remit_num
                 $cr_result = get_check_remit($dblink, $cph_payment_method, $current_year);
 
                 // 使用在 bills UPDATE 之前預先查好的 disbursements 資料
                 $disbs_rows = $disbs_rows_pre;
 
-                // =========================================================
-                // 計算抵扣分配：先扣 disbs，剩餘再扣 services
-                // =========================================================
+                $cph_ctx = [
+                    'foreign_amount' => $cph_foreign_amount,
+                    'twd_amount' => $cph_twd_amount,
+                    'rate' => $cph_rate,
+                    'currency' => $cph_currency,
+                    'payment_method' => $cph_payment_method,
+                    'bank_account' => $cph_bank_account,
+                ];
+
+                // ---- Step 1：計算這筆預收款要扣多少 disbs / legal_services ----
+                // （$disbs_state / $legal_remaining_* 會被遞減，供下一筆 cph 接續扣剩餘額度）
                 if ($is_both_foreign) {
-                    // 外幣：可用抵扣金額以台幣計算
-                    $available = $cph_twd_amount > 0 ? $cph_twd_amount : ($cph_foreign_amount * $bill_x_rate2);
+                    $allocation = allocate_foreign_deduction($disbs_rows, $disbs_state, $cph_foreign_amount, $legal_remaining_foreign, $bill_x_rate2);
                 } else {
-                    // 台幣：可用抵扣金額
-                    $available = $cph_twd_amount;
+                    $allocation = allocate_twd_deduction($disbs_rows, $disbs_state, $cph_twd_amount, $legal_remaining_ntd);
                 }
 
-                // 逐筆扣 disbs
-                $actual_disbs_total = 0;
-                $disbs_pay_amounts = []; // 記錄每筆 disbursement 實際扣除的金額
-
-                foreach ($disbs_rows as $idx => $disb) {
-                    $disb_ntd = floatval($disb['ntd_amount']);
-                    if ($available >= $disb_ntd) {
-                        // 全額扣除此筆 disbursement
-                        $disb_pay = $disb_ntd;
-                    } else {
-                        // 部分扣除（剩餘金額不夠）
-                        $disb_pay = max(0, $available);
-                    }
-                    $available -= $disb_pay;
-                    $actual_disbs_total += $disb_pay;
-                    $disbs_pay_amounts[$idx] = $disb_pay;
-                }
-
-                // 剩餘金額分配給 services
-                $pay_disbs = intval(round($actual_disbs_total));
-                $pay_legal_services = intval(round(min($available, $bill_legal_services))); // available 是扣完 disbs 後的剩餘
-
+                // ---- Step 2：寫入 payments ----
                 if ($is_both_foreign) {
-                    // =============================================
-                    // 外幣消帳邏輯
-                    // =============================================
-                    $pay_rec_ntd = round($cph_foreign_amount * $cph_rate);  // 外幣 * rec_x_rate，取整寫入 integer 欄位
-                    $pay_rec_usd = round($cph_foreign_amount, 2); // 可能是部分
-                    $pay_method = $cph_payment_method;
-                    // pay_legal_services 和 pay_disbs 已在上面計算
-                    $pay_rec_x_rate = $cph_rate;
-                    $pay_sub_retainer = -1 * $cph_foreign_amount;  // 負數
-                    $pay_sub_retainer_ntd = round($pay_sub_retainer * $cph_rate); // sub_retainer * rec_x_rate，負數，取整
-                    $pay_currency = $cph_currency;
-                    $pay_bank_account = $cph_bank_account;
-                    $pay_rec_other_rate = $bill_x_rate2;
-                    $pay_foreign_amount = $cph_foreign_amount;
-                    $pay_bills_currency = $bill_currency2;
-                    // foreign_legal / foreign_disbs => 來自 bills 外幣欄位
-                    $pay_foreign_legal  = floatval($bill['foreign_legal2'] ?? 0);
-                    $pay_foreign_disbs  = floatval($bill['foreign_disbs2'] ?? 0);
-
-                    // exchange_gain_loss 計算
-                    $pay_exchange_gain_loss = 0;
-                    if (
-                        $cph_payment_method == 'A' || $cph_payment_method == 'B' ||
-                        (($cph_payment_method == 'C' || $cph_payment_method == 'D' ||
-                            $cph_payment_method == 'E' || $cph_payment_method == 'G') &&
-                            ($pay_rec_other_rate != $pay_rec_x_rate))
-                    ) {
-                        $pay_exchange_gain_loss = $pay_foreign_amount * $pay_rec_x_rate - $pay_legal_services - $pay_disbs;
-                    }
-
-                    // remit / check_num
-                    $pay_check_num = null;
-                    $pay_remit_num = null;
-                    if ($cr_result['type'] == 'C') {
-                        $pay_check_num = $cr_result['number'];
-                    } else {
-                        $pay_remit_num = $cr_result['number'];
-                    }
-
-                    $sql_ins_pay = "INSERT INTO payments (
-                                        case_num, deb_num, rec_date, rec_ntd, method, notes,
-                                        legal_services, disbs, rec_usd, rec_x_rate,
-                                        voucher_date, date_bank, check_num, remit_num,
-                                        sub_retainer, sub_retainer_ntd, currency, bank_account,
-                                        rec_other_rate, foreign_amount, bills_currency,
-                                        exchange_gain_loss,
-                                        with_tax, other_loss_gain,
-                                        sub_temp_pay, sub_temp_pay_ntd, bank_fee_dom,
-                                        foreign_legal, foreign_disbs
-                                    ) VALUES (
-                                        $1, $2, $3, $4, $5, $6,
-                                        $7, $8, $9, $10,
-                                        $11, $12, $13, $14,
-                                        $15, $16, $17, $18,
-                                        $19, $20, $21,
-                                        $22,
-                                        0, 0,
-                                        0, 0, 0,
-                                        $23, $24
-                                    ) RETURNING id";
-
-                    $res_ins_pay = pg_query_params($dblink, $sql_ins_pay, [
-                        $case_num,           // $1
-                        $deb_num,            // $2
-                        $sent_date,          // $3
-                        $pay_rec_ntd,        // $4
-                        $pay_method,         // $5
-                        $pay_notes,          // $6
-                        $pay_legal_services, // $7
-                        $pay_disbs,          // $8
-                        $pay_rec_usd,        // $9
-                        number_format($pay_rec_x_rate, 2, '.', ''),     // $10
-                        $sent_date,          // $11
-                        $pay_date_bank,      // $12
-                        $pay_check_num,      // $13
-                        $pay_remit_num,      // $14
-                        $pay_sub_retainer,     // $15
-                        $pay_sub_retainer_ntd, // $16
-                        $pay_currency,         // $17
-                        $pay_bank_account,     // $18
-                        $pay_rec_other_rate,   // $19
-                        $pay_foreign_amount,   // $20
-                        $pay_bills_currency,   // $21
-                        $pay_exchange_gain_loss, // $22
-                        $pay_foreign_legal,    // $23
-                        $pay_foreign_disbs     // $24
-                    ]);
+                    $payments_id = insert_foreign_currency_payment($dblink, $case_num, $deb_num, $sent_date, $pay_notes, $pay_date_bank, $cph_ctx, $bill_ctx, $allocation, $cr_result);
                 } else {
-                    // =============================================
-                    // 台幣消帳邏輯
-                    // =============================================
-                    $pay_rec_ntd = $cph_twd_amount;  // 抵扣金額
-                    $pay_method = $cph_payment_method;
-                    // pay_legal_services 和 pay_disbs 已在上面計算
-                    $pay_rec_usd = ($bill_x_rate > 0) ? round(($pay_legal_services + $pay_disbs) / $bill_x_rate, 2) : round($bill_usd_total, 2);
-                    $pay_rec_x_rate = $bill_x_rate;
-                    $pay_sub_retainer_ntd = -1 * $cph_twd_amount;  // 負數
-                    $pay_currency = 'USD';
-                    $pay_bank_account = $cph_bank_account;
-                    $pay_rec_other_rate = $bill_x_rate;
-                    $pay_foreign_amount = ($bill_x_rate > 0) ? ($pay_legal_services + $pay_disbs) / $bill_x_rate : $bill_usd_total;
-                    $pay_bills_currency = 'USD';
-
-                    // remit / check_num
-                    $pay_check_num = null;
-                    $pay_remit_num = null;
-                    if ($cr_result['type'] == 'C') {
-                        $pay_check_num = $cr_result['number'];
-                    } else {
-                        $pay_remit_num = $cr_result['number'];
-                    }
-
-                    $sql_ins_pay = "INSERT INTO payments (
-                                        case_num, deb_num, rec_date, rec_ntd, method, notes,
-                                        legal_services, disbs, rec_usd, rec_x_rate,
-                                        voucher_date, date_bank, check_num, remit_num,
-                                        sub_retainer_ntd, currency, bank_account,
-                                        rec_other_rate, foreign_amount, bills_currency,
-                                        exchange_gain_loss,
-                                        with_tax, other_loss_gain,
-                                        sub_retainer, sub_temp_pay, sub_temp_pay_ntd, bank_fee_dom
-                                    ) VALUES (
-                                        $1, $2, $3, $4, $5, $6,
-                                        $7, $8, $9, $10,
-                                        $11, $12, $13, $14,
-                                        $15, $16, $17,
-                                        $18, $19, $20,
-                                        0,
-                                        0, 0,
-                                        0, 0, 0, 0
-                                    ) RETURNING id";
-
-                    $res_ins_pay = pg_query_params($dblink, $sql_ins_pay, [
-                        $case_num,           // $1
-                        $deb_num,            // $2
-                        $sent_date,          // $3
-                        $pay_rec_ntd,        // $4
-                        $pay_method,         // $5
-                        $pay_notes,          // $6
-                        $pay_legal_services, // $7
-                        $pay_disbs,          // $8
-                        $pay_rec_usd,        // $9
-                        number_format($pay_rec_x_rate, 2, '.', ''),     // $10
-                        $sent_date,   // $11
-                        $pay_date_bank,      // $12
-                        $pay_check_num,      // $13
-                        $pay_remit_num,      // $14
-                        $pay_sub_retainer_ntd, // $15
-                        $pay_currency,         // $16
-                        $pay_bank_account,     // $17
-                        $pay_rec_other_rate,   // $18
-                        $pay_foreign_amount,   // $19
-                        $pay_bills_currency    // $20
-                    ]);
+                    $payments_id = insert_twd_payment($dblink, $case_num, $deb_num, $sent_date, $pay_notes, $pay_date_bank, $cph_ctx, $bill_ctx, $allocation, $cr_result);
                 }
 
-                if (!$res_ins_pay) {
-                    throw new Exception("Insert payments failed: " . pg_last_error($dblink));
-                }
+                // ---- Step 3：寫入 disbs_payments（使用 Step 1 計算後的 pay_amount）----
+                insert_disbs_payment_rows($dblink, $case_num, $deb_num, $sent_date, $payments_id, $disbs_rows, $disbs_state, $allocation, $is_both_foreign, $cph_currency);
 
-                // 取得剛插入的 payments ID
-                $pay_row = pg_fetch_assoc($res_ins_pay);
-                $payments_id = $pay_row['id'];
-
-                // =========================================================
-                // 寫入 disbs_payments（使用計算後的 pay_amount）
-                // =========================================================
-                foreach ($disbs_rows as $idx => $disb) {
-                    $disb_pay_amount = $disbs_pay_amounts[$idx]; // 實際消帳金額（可能是部分）
-                    $disb_bpm_rownum = intval($disb['bpm_rownum']) * -1; // 負數
-
-                    // 外幣情況
-                    $disb_currency           = null;
-                    $disb_foreign_amount     = null;
-                    $disb_pay_foreign_amount = null;
-                    if ($is_both_foreign && $bill_x_rate2 > 0) {
-                        $disb_currency           = $cph_currency;
-                        $disb_foreign_amount     = round(floatval($disb['ntd_amount']) / $bill_x_rate2, 2);
-                        $disb_pay_foreign_amount = round($disb_pay_amount / $bill_x_rate2, 2);
-                    }
-
-                    $sql_ins_dp = "INSERT INTO disbs_payments (
-                                        disbs_ref_id, payments_ref_id, case_num, deb_num,
-                                        date, payment_date, voucher_date,
-                                        disb_code, disb_name, amount, pay_amount, bpm_rownum,
-                                        currency, foreign_amount, pay_foreign_amount
-                                    ) VALUES (
-                                        $1, $2, $3, $4,
-                                        $5, $6, $7,
-                                        $8, $9, $10, $11, $12,
-                                        $13, $14, $15
-                                    )";
-
-                    $res_dp = pg_query_params($dblink, $sql_ins_dp, [
-                        $disb['id'],
-                        $payments_id,
-                        $case_num,
-                        $deb_num,
-                        $disb['date'],
-                        $sent_date, 
-                        $sent_date,
-                        $disb['disb_code'],
-                        $disb['disb_name'],
-                        intval(round(floatval($disb['ntd_amount']))),
-                        intval(round($disb_pay_amount)),
-                        $disb_bpm_rownum,
-                        $disb_currency,
-                        $disb_foreign_amount,
-                        $disb_pay_foreign_amount
-                    ]);
-
-                    if (!$res_dp) {
-                        throw new Exception("Insert disbs_payments failed: " . pg_last_error($dblink));
-                    }
-                }
-
-                // =========================================================
-                // 1. 更新 Received 的 remain（扣除本次使用金額），並以 RETURNING 取得最新餘額
-                // =========================================================
-                $sql_upd_received = "UPDATE client_pay_history
-                                     SET remain_twd_amount = remain_twd_amount - $1,
-                                         remain_foreign_amount = remain_foreign_amount - $2
-                                     WHERE id = $3
-                                     RETURNING remain_twd_amount, remain_foreign_amount";
-                $res_upd_received = pg_query_params($dblink, $sql_upd_received, [
-                    $cph_twd_amount,
-                    $cph_foreign_amount,
-                    $cph_relation_id
-                ]);
-                if (!$res_upd_received) {
-                    throw new Exception("Update Received remain failed: " . pg_last_error($dblink));
-                }
-                $new_remain = pg_fetch_assoc($res_upd_received);
-
-                // =========================================================
-                // 2. 更新 Applied 的 status = 1，並記錄此時 Received 的 remain 快照
-                // =========================================================
-                $sql_cph_status = "UPDATE client_pay_history
-                                   SET status = 1,
-                                       remain_twd_amount = $2,
-                                       remain_foreign_amount = $3
-                                   WHERE id = $1";
-                $res_cph_status = pg_query_params($dblink, $sql_cph_status, [
-                    $cph['id'],
-                    $new_remain['remain_twd_amount'],
-                    $new_remain['remain_foreign_amount']
-                ]);
-                if (!$res_cph_status) {
-                    throw new Exception("Update client_pay_history status failed: " . pg_last_error($dblink));
-                }
-
-                // =========================================================
-                // 3. 更新 client_pay_total 的 twd_total_amount / foreign_total_amount
-                //    apply 時從正式總額扣除已使用金額
-                // =========================================================
-                $sql_upd_total = "UPDATE client_pay_total
-                                  SET twd_total_amount = twd_total_amount - $1,
-                                      foreign_total_amount = foreign_total_amount - $2,
-                                      update_time = CURRENT_TIMESTAMP
-                                  WHERE case_num = $3";
-                $res_upd_total = pg_query_params($dblink, $sql_upd_total, [
-                    $cph_twd_amount,
-                    $cph_foreign_amount,
-                    $cph_case_num
-                ]);
-                if (!$res_upd_total) {
-                    throw new Exception("Update client_pay_total failed: " . pg_last_error($dblink));
-                }
+                // ---- Step 4：更新 Received 剩餘額度 / Applied 狀態 / client_pay_total 總額 ----
+                apply_retainer_credit_deduction($dblink, $cph['id'], $cph_relation_id, $cph_twd_amount, $cph_foreign_amount, $cph_rate, $cph_case_num);
             }
         }
 
         pg_query($dblink, "COMMIT");
-        echo "<script>alert('帳單已成功套用日期並寄出 (Applied Sent Date)'); window.location.href = document.referrer;</script>";
+        echo "<script>alert('帳單已成功套用日期並寄出 (Applied Sent Date)'); window.location.href = " . json_encode($return_url) . ";</script>";
     }
 } catch (Exception $e) {
     pg_query($dblink, "ROLLBACK");
@@ -870,4 +605,437 @@ function get_check_remit($dblink, $method, $current_year) {
         'type' => $cr,
         'number' => $formatted
     ];
+}
+
+// =====================================================================
+// Apply 消帳輔助函數（給「8. Payments + Disbs_Payments 寫入」使用）
+// =====================================================================
+
+/**
+ * 初始化每筆 disbursement 的「剩餘可扣額度」。
+ * 同一張帳單若有多筆 client_pay_history 需要依序消帳，呼叫端會讓這份資料
+ * 跨迴圈重複使用並遞減，確保後面的預收款不會重複扣同一筆 disbursement。
+ */
+function init_disbs_state($disbs_rows, $bill_x_rate2) {
+    $disbs_state = [];
+    foreach ($disbs_rows as $idx => $disb) {
+        $disb_ntd = floatval($disb['ntd_amount']);
+        $disb_rate = floatval($disb['x_rate']);
+        $disb_rate_used = $disb_rate > 0 ? $disb_rate : $bill_x_rate2;
+        $stored_foreign = $disb['foreign_amount'] ?? null;
+        // 優先使用 disbursements 自己記錄的外幣金額；若無（如銀行手續費），才用帳單的 x_rate2 換算
+        $disb_foreign = ($stored_foreign !== null && $stored_foreign !== '' && floatval($stored_foreign) > 0)
+            ? floatval($stored_foreign)
+            : ($bill_x_rate2 > 0 ? round($disb_ntd / $bill_x_rate2, 2) : 0);
+
+        $disbs_state[$idx] = [
+            'remaining_ntd' => $disb_ntd,
+            'remaining_foreign' => $disb_foreign,
+            'full_foreign' => $disb_foreign, // 完整外幣金額（顯示用，不隨消帳遞減）
+            'rate_used' => $disb_rate_used,
+        ];
+    }
+    return $disbs_state;
+}
+
+/**
+ * 取得某筆 Applied 抵扣紀錄所對應的原始 Retainer (Received) 的 record_date。
+ */
+function fetch_retainer_record_date($dblink, $cph_relation_id) {
+    if (!$cph_relation_id) return '';
+
+    $sql_retainer = "SELECT record_date FROM client_pay_history
+                     WHERE id = $1
+                       AND payment_type = 'Retainer'
+                       AND payment_status = 'Received'
+                     LIMIT 1";
+    $res_retainer = pg_query_params($dblink, $sql_retainer, [$cph_relation_id]);
+    if ($res_retainer && pg_num_rows($res_retainer) > 0) {
+        $row_retainer = pg_fetch_assoc($res_retainer);
+        return $row_retainer['record_date'] ?? '';
+    }
+    return '';
+}
+
+/**
+ * 外幣消帳分配：以外幣金額逐筆比對每筆 disbursement 的剩餘額度（先扣 disbs），
+ * 避免用單一匯率換算不同 disb 的台幣金額；扣完 disbs 後剩餘的外幣金額再拿去扣 legal_services。
+ * $disbs_state / $legal_remaining_foreign 會被遞減，讓下一筆 client_pay_history 接續扣剩餘額度。
+ */
+function allocate_foreign_deduction($disbs_rows, &$disbs_state, $cph_foreign_amount, &$legal_remaining_foreign, $bill_x_rate2) {
+    $disbs_pay_amounts = [];
+    $disbs_pay_foreign_amounts = [];
+    $actual_disbs_total = 0;
+    $actual_disbs_foreign_total = 0;
+    $available_foreign = $cph_foreign_amount;
+
+    foreach ($disbs_rows as $idx => $disb) {
+        $remaining_ntd = $disbs_state[$idx]['remaining_ntd'];
+        $remaining_foreign = $disbs_state[$idx]['remaining_foreign'];
+        $rate_used = $disbs_state[$idx]['rate_used'];
+
+        if ($remaining_foreign <= 0) {
+            $disb_pay = 0;
+            $disb_pay_foreign = 0;
+        } elseif ($available_foreign >= $remaining_foreign) {
+            // 全額扣除此筆 disbursement 剩餘額度，直接用剩餘台幣金額避免匯率轉換誤差
+            $disb_pay_foreign = $remaining_foreign;
+            $disb_pay = $remaining_ntd;
+        } else {
+            // 部分扣除（剩餘外幣不夠），依該筆自己的匯率換算台幣
+            $disb_pay_foreign = max(0, $available_foreign);
+            $disb_pay = round($disb_pay_foreign * $rate_used);
+        }
+        $available_foreign -= $disb_pay_foreign;
+        $disbs_state[$idx]['remaining_foreign'] -= $disb_pay_foreign;
+        $disbs_state[$idx]['remaining_ntd'] -= $disb_pay;
+
+        $disbs_pay_amounts[$idx] = $disb_pay;
+        $disbs_pay_foreign_amounts[$idx] = $disb_pay_foreign;
+        $actual_disbs_total += $disb_pay;
+        $actual_disbs_foreign_total += $disb_pay_foreign;
+    }
+
+    $pay_disbs = intval(round($actual_disbs_total));
+    $pay_legal_foreign = min($available_foreign, $legal_remaining_foreign);
+    $legal_remaining_foreign -= $pay_legal_foreign;
+    $pay_legal_services = intval(round($pay_legal_foreign * $bill_x_rate2));
+
+    return [
+        'pay_disbs' => $pay_disbs,
+        'pay_legal_services' => $pay_legal_services,
+        'pay_legal_foreign' => $pay_legal_foreign,
+        'actual_disbs_foreign_total' => $actual_disbs_foreign_total,
+        'disbs_pay_amounts' => $disbs_pay_amounts,
+        'disbs_pay_foreign_amounts' => $disbs_pay_foreign_amounts,
+    ];
+}
+
+/**
+ * 台幣消帳分配：逐筆扣 disbursement 剩餘額度（先扣 disbs），剩餘金額再拿去扣 legal_services。
+ * $disbs_state / $legal_remaining_ntd 會被遞減，讓下一筆 client_pay_history 接續扣剩餘額度。
+ */
+function allocate_twd_deduction($disbs_rows, &$disbs_state, $cph_twd_amount, &$legal_remaining_ntd) {
+    $disbs_pay_amounts = [];
+    $actual_disbs_total = 0;
+    $available = $cph_twd_amount;
+
+    foreach ($disbs_rows as $idx => $disb) {
+        $remaining_ntd = $disbs_state[$idx]['remaining_ntd'];
+        if ($available >= $remaining_ntd) {
+            // 全額扣除此筆 disbursement 剩餘額度
+            $disb_pay = $remaining_ntd;
+        } else {
+            // 部分扣除（剩餘金額不夠）
+            $disb_pay = max(0, $available);
+        }
+        $available -= $disb_pay;
+        $disbs_state[$idx]['remaining_ntd'] -= $disb_pay;
+        $actual_disbs_total += $disb_pay;
+        $disbs_pay_amounts[$idx] = $disb_pay;
+    }
+
+    // 剩餘金額分配給 services
+    $pay_disbs = intval(round($actual_disbs_total));
+    $pay_legal_services = intval(round(min($available, $legal_remaining_ntd))); // available 是扣完 disbs 後的剩餘
+    $legal_remaining_ntd -= $pay_legal_services;
+
+    return [
+        'pay_disbs' => $pay_disbs,
+        'pay_legal_services' => $pay_legal_services,
+        'disbs_pay_amounts' => $disbs_pay_amounts,
+    ];
+}
+
+/**
+ * 依 get_check_remit 的結果決定 check_num / remit_num 要填哪一個欄位。
+ */
+function resolve_check_or_remit_num($cr_result) {
+    if ($cr_result['type'] == 'C') {
+        return [$cr_result['number'], null]; // [check_num, remit_num]
+    }
+    return [null, $cr_result['number']];
+}
+
+/**
+ * 外幣消帳：寫入一筆 payments 紀錄，回傳新增的 payments.id。
+ */
+function insert_foreign_currency_payment($dblink, $case_num, $deb_num, $sent_date, $pay_notes, $pay_date_bank, $cph_ctx, $bill_ctx, $allocation, $cr_result) {
+    $pay_legal_services = $allocation['pay_legal_services'];
+    $pay_disbs = $allocation['pay_disbs'];
+
+    $pay_rec_ntd = $pay_legal_services + $pay_disbs; // 本筆 payment 實際套用到帳單的台幣金額
+    $pay_rec_usd = round($cph_ctx['foreign_amount'], 2); // 可能是部分
+    $pay_rec_x_rate = $cph_ctx['rate'];
+    $pay_sub_retainer = number_format(-1 * $cph_ctx['foreign_amount'], 2, '.', '');  // 負數，外幣需補上小數點後兩位
+    $pay_sub_retainer_ntd = round($pay_sub_retainer * $cph_ctx['rate']); // sub_retainer * rec_x_rate，負數，取整
+    $pay_rec_other_rate = $bill_ctx['x_rate2'];
+    $pay_foreign_amount = $cph_ctx['foreign_amount'];
+    // foreign_legal / foreign_disbs => 本筆 payment 實際扣除的外幣金額（不是帳單全額）
+    $pay_foreign_legal = $allocation['pay_legal_foreign'];
+    $pay_foreign_disbs = $allocation['actual_disbs_foreign_total'];
+
+    // exchange_gain_loss 計算
+    $pay_exchange_gain_loss = 0;
+    if (
+        $cph_ctx['payment_method'] == 'A' || $cph_ctx['payment_method'] == 'B' ||
+        (($cph_ctx['payment_method'] == 'C' || $cph_ctx['payment_method'] == 'D' ||
+            $cph_ctx['payment_method'] == 'E' || $cph_ctx['payment_method'] == 'G') &&
+            ($pay_rec_other_rate != $pay_rec_x_rate))
+    ) {
+        $pay_exchange_gain_loss = $pay_foreign_amount * $pay_rec_x_rate - $pay_legal_services - $pay_disbs;
+    }
+
+    [$pay_check_num, $pay_remit_num] = resolve_check_or_remit_num($cr_result);
+
+    $sql_ins_pay = "INSERT INTO payments (
+                        case_num, deb_num, rec_date, rec_ntd, method, notes,
+                        legal_services, disbs, rec_usd, rec_x_rate,
+                        voucher_date, date_bank, check_num, remit_num,
+                        sub_retainer, sub_retainer_ntd, currency, bank_account,
+                        rec_other_rate, foreign_amount, bills_currency,
+                        exchange_gain_loss,
+                        with_tax, other_loss_gain,
+                        sub_temp_pay, sub_temp_pay_ntd, bank_fee_dom,
+                        foreign_legal, foreign_disbs
+                    ) VALUES (
+                        $1, $2, $3, $4, $5, $6,
+                        $7, $8, $9, $10,
+                        $11, $12, $13, $14,
+                        $15, $16, $17, $18,
+                        $19, $20, $21,
+                        $22,
+                        0, 0,
+                        0, 0, 0,
+                        $23, $24
+                    ) RETURNING id";
+
+    $res_ins_pay = pg_query_params($dblink, $sql_ins_pay, [
+        $case_num,           // $1
+        $deb_num,            // $2
+        $sent_date,          // $3
+        $pay_rec_ntd,        // $4
+        $cph_ctx['payment_method'], // $5
+        $pay_notes,          // $6
+        $pay_legal_services, // $7
+        $pay_disbs,          // $8
+        $pay_rec_usd,        // $9
+        number_format($pay_rec_x_rate, 2, '.', ''),     // $10
+        $sent_date,          // $11
+        $pay_date_bank,      // $12
+        $pay_check_num,      // $13
+        $pay_remit_num,      // $14
+        $pay_sub_retainer,     // $15
+        $pay_sub_retainer_ntd, // $16
+        $cph_ctx['currency'],  // $17
+        $cph_ctx['bank_account'], // $18
+        $pay_rec_other_rate,   // $19
+        $pay_foreign_amount,   // $20
+        $bill_ctx['currency2'], // $21
+        $pay_exchange_gain_loss, // $22
+        $pay_foreign_legal,    // $23
+        $pay_foreign_disbs     // $24
+    ]);
+
+    if (!$res_ins_pay) {
+        throw new Exception("Insert payments failed: " . pg_last_error($dblink));
+    }
+
+    $pay_row = pg_fetch_assoc($res_ins_pay);
+    return $pay_row['id'];
+}
+
+/**
+ * 台幣消帳：寫入一筆 payments 紀錄，回傳新增的 payments.id。
+ */
+function insert_twd_payment($dblink, $case_num, $deb_num, $sent_date, $pay_notes, $pay_date_bank, $cph_ctx, $bill_ctx, $allocation, $cr_result) {
+    $pay_legal_services = $allocation['pay_legal_services'];
+    $pay_disbs = $allocation['pay_disbs'];
+    $bill_x_rate = $bill_ctx['x_rate'];
+    $bill_twd_total = $bill_ctx['twd_total'];
+    $bill_usd_total = $bill_ctx['usd_total'];
+
+    $pay_rec_ntd = $cph_ctx['twd_amount'];  // 抵扣金額
+    // pay_legal_services 和 pay_disbs 已在上面計算
+    $pay_rec_usd = ($bill_x_rate > 0) 
+                        ? round($bill_usd_total - (($bill_twd_total - $pay_legal_services - $pay_disbs) / $bill_x_rate), 2) // USD總額 - (台幣剩餘金額)/匯率
+                        : round($bill_usd_total, 2);
+    $pay_rec_x_rate = $bill_x_rate;
+    $pay_sub_retainer_ntd = -1 * $cph_ctx['twd_amount'];  // 負數
+    $pay_rec_other_rate = $bill_x_rate;
+    $pay_foreign_amount = ($bill_x_rate > 0) ? ($pay_legal_services + $pay_disbs) / $bill_x_rate : $bill_usd_total;
+
+    [$pay_check_num, $pay_remit_num] = resolve_check_or_remit_num($cr_result);
+
+    $sql_ins_pay = "INSERT INTO payments (
+                        case_num, deb_num, rec_date, rec_ntd, method, notes,
+                        legal_services, disbs, rec_usd, rec_x_rate,
+                        voucher_date, date_bank, check_num, remit_num,
+                        sub_retainer_ntd, currency, bank_account,
+                        rec_other_rate, foreign_amount, bills_currency,
+                        exchange_gain_loss,
+                        with_tax, other_loss_gain,
+                        sub_retainer, sub_temp_pay, sub_temp_pay_ntd, bank_fee_dom
+                    ) VALUES (
+                        $1, $2, $3, $4, $5, $6,
+                        $7, $8, $9, $10,
+                        $11, $12, $13, $14,
+                        $15, $16, $17,
+                        $18, $19, $20,
+                        0,
+                        0, 0,
+                        0, 0, 0, 0
+                    ) RETURNING id";
+
+    $res_ins_pay = pg_query_params($dblink, $sql_ins_pay, [
+        $case_num,           // $1
+        $deb_num,            // $2
+        $sent_date,          // $3
+        $pay_rec_ntd,        // $4
+        $cph_ctx['payment_method'], // $5
+        $pay_notes,          // $6
+        $pay_legal_services, // $7
+        $pay_disbs,          // $8
+        $pay_rec_usd,        // $9
+        number_format($pay_rec_x_rate, 2, '.', ''),     // $10
+        $sent_date,   // $11
+        $pay_date_bank,      // $12
+        $pay_check_num,      // $13
+        $pay_remit_num,      // $14
+        $pay_sub_retainer_ntd, // $15
+        'USD',                 // $16
+        $cph_ctx['bank_account'], // $17
+        $pay_rec_other_rate,   // $18
+        $pay_foreign_amount,   // $19
+        'USD'                  // $20
+    ]);
+
+    if (!$res_ins_pay) {
+        throw new Exception("Insert payments failed: " . pg_last_error($dblink));
+    }
+
+    $pay_row = pg_fetch_assoc($res_ins_pay);
+    return $pay_row['id'];
+}
+
+/**
+ * 寫入這筆 payment 對應的 disbs_payments 紀錄（使用 Step 1 分配計算後的 pay_amount）。
+ * 本次消帳為 0 的 disbursement 會跳過，不寫入紀錄。
+ */
+function insert_disbs_payment_rows($dblink, $case_num, $deb_num, $sent_date, $payments_id, $disbs_rows, $disbs_state, $allocation, $is_both_foreign, $cph_currency) {
+    $disbs_pay_amounts = $allocation['disbs_pay_amounts'];
+    $disbs_pay_foreign_amounts = $allocation['disbs_pay_foreign_amounts'] ?? [];
+
+    foreach ($disbs_rows as $idx => $disb) {
+        $disb_pay_amount = $disbs_pay_amounts[$idx]; // 實際消帳金額（可能是部分）
+
+        // 這筆 disbursement 在本次 payment 沒有實際扣款，跳過（避免產生金額為 0 的 disbs_payments 紀錄）
+        if ($disb_pay_amount <= 0) continue;
+
+        $disb_bpm_rownum = intval($disb['bpm_rownum']) * -1; // 負數
+
+        // 外幣情況（使用該筆 disbursement 自己的匯率換算出的金額，而非帳單 x_rate2 統一換算）
+        $disb_currency           = null;
+        $disb_foreign_amount     = null;
+        $disb_pay_foreign_amount = null;
+        if ($is_both_foreign) {
+            $disb_currency           = $cph_currency;
+            $disb_foreign_amount     = $disbs_state[$idx]['full_foreign'] ?? null;
+            $disb_pay_foreign_amount = $disbs_pay_foreign_amounts[$idx] ?? null;
+        }
+
+        $sql_ins_dp = "INSERT INTO disbs_payments (
+                            disbs_ref_id, payments_ref_id, case_num, deb_num,
+                            date, payment_date, voucher_date,
+                            disb_code, disb_name, amount, pay_amount, bpm_rownum,
+                            currency, foreign_amount, pay_foreign_amount
+                        ) VALUES (
+                            $1, $2, $3, $4,
+                            $5, $6, $7,
+                            $8, $9, $10, $11, $12,
+                            $13, $14, $15
+                        )";
+
+        $res_dp = pg_query_params($dblink, $sql_ins_dp, [
+            $disb['id'],
+            $payments_id,
+            $case_num,
+            $deb_num,
+            $disb['date'],
+            $sent_date,
+            $sent_date,
+            $disb['disb_code'],
+            $disb['disb_name'],
+            intval(round(floatval($disb['ntd_amount']))),
+            intval(round($disb_pay_amount)),
+            $disb_bpm_rownum,
+            $disb_currency,
+            $disb_foreign_amount,
+            $disb_pay_foreign_amount
+        ]);
+
+        if (!$res_dp) {
+            throw new Exception("Insert disbs_payments failed: " . pg_last_error($dblink));
+        }
+    }
+}
+
+/**
+ * 消帳完成後的三項帳務更新：
+ *   1. Received 剩餘額度扣除本次使用金額
+ *   2. Applied 狀態標記為已處理，並記錄當時 Received 的剩餘快照
+ *   3. client_pay_total 正式總額扣除本次使用金額
+ */
+function apply_retainer_credit_deduction($dblink, $cph_id, $cph_relation_id, $cph_twd_amount, $cph_foreign_amount, $cph_rate, $cph_case_num) {
+    // 1. 更新 Received 的 remain（扣除本次使用金額），並以 RETURNING 取得最新餘額
+    $sql_upd_received = "UPDATE client_pay_history
+                         SET remain_twd_amount = remain_twd_amount - $1,
+                             remain_foreign_amount = remain_foreign_amount - $2,
+                             remain_for_twd_amount = ROUND((remain_foreign_amount - $2) * rate, 0)
+                         WHERE id = $3
+                         RETURNING remain_twd_amount, remain_foreign_amount, remain_for_twd_amount";
+    $res_upd_received = pg_query_params($dblink, $sql_upd_received, [
+        $cph_twd_amount,
+        $cph_foreign_amount,
+        $cph_relation_id
+    ]);
+    if (!$res_upd_received) {
+        throw new Exception("Update Received remain failed: " . pg_last_error($dblink));
+    }
+    $new_remain = pg_fetch_assoc($res_upd_received);
+
+    // 2. 更新 Applied 的 status = 1，並記錄此時 Received 的 remain 快照
+    $sql_cph_status = "UPDATE client_pay_history
+                       SET status = 1,
+                           remain_twd_amount = $2,
+                           remain_foreign_amount = $3,
+                           remain_for_twd_amount = $4
+                       WHERE id = $1";
+    $res_cph_status = pg_query_params($dblink, $sql_cph_status, [
+        $cph_id,
+        $new_remain['remain_twd_amount'],
+        $new_remain['remain_foreign_amount'],
+        $new_remain['remain_for_twd_amount']
+    ]);
+    if (!$res_cph_status) {
+        throw new Exception("Update client_pay_history status failed: " . pg_last_error($dblink));
+    }
+
+    // 3. 更新 client_pay_total 的 twd_total_amount / foreign_total_amount / foreign_twd_amount
+    //    apply 時從正式總額扣除已使用金額
+    $sql_upd_total = "UPDATE client_pay_total
+                      SET twd_total_amount = twd_total_amount - $1,
+                          foreign_total_amount = foreign_total_amount - $2,
+                          foreign_twd_amount = foreign_twd_amount - $3,
+                          update_time = CURRENT_TIMESTAMP
+                      WHERE case_num = $4";
+    $res_upd_total = pg_query_params($dblink, $sql_upd_total, [
+        $cph_twd_amount,
+        $cph_foreign_amount,
+        intval(round($cph_foreign_amount * $cph_rate)),
+        $cph_case_num
+    ]);
+    if (!$res_upd_total) {
+        throw new Exception("Update client_pay_total failed: " . pg_last_error($dblink));
+    }
 }

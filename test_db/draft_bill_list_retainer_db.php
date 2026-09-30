@@ -1,11 +1,13 @@
 <?php
-session_start();
+if (session_status() === PHP_SESSION_NONE){
+  session_start();
+}
 
 /**
  * Retainer 預收款分配後端 API
  * 處理 Draft Bill List 頁面的預收款進階分配功能
  */
-require_once("db23.ini");
+require_once(__DIR__ . '/../db23.php');
 
 /**
  * 取得預收款餘額及可使用的所有預收款
@@ -189,6 +191,23 @@ function saveAllocation($retainers) {
             // 計算外幣對應台幣金額（四捨五入到整數）
             $for_twd_amount = (int) round($foreign_amount * $rate);
 
+            // 查詢 Received 目前的 remain_for_twd_amount，以便計算本次抵扣後的剩餘台幣金額
+            $received_remain_for_twd = 0;
+            if (!empty($relation_id)) {
+                $sql_received = "SELECT remain_for_twd_amount FROM client_pay_history
+                                 WHERE id = $1
+                                   AND payment_type = 'Retainer'
+                                   AND payment_status = 'Received'
+                                 LIMIT 1";
+                $res_received = pg_query_params($dblink, $sql_received, [$relation_id]);
+                if ($res_received && pg_num_rows($res_received) > 0) {
+                    $row_received = pg_fetch_assoc($res_received);
+                    $received_remain_for_twd = floatval($row_received['remain_for_twd_amount'] ?? 0);
+                }
+            }
+            // remain_for_twd_amount = Received 目前的 remain_for_twd_amount - 本次 for_twd_amount
+            $remain_for_twd_amount = (int) round($received_remain_for_twd - $for_twd_amount);
+
             // --- 檢查是否已存在 ---
             $check_sql = "SELECT id, twd_amount, foreign_amount FROM client_pay_history
                           WHERE case_num = $1 
@@ -279,13 +298,15 @@ function saveAllocation($retainers) {
                 $update_history_sql = "UPDATE client_pay_history 
                                        SET foreign_amount = $1, 
                                            twd_amount = $2,
-                                           for_twd_amount = $4
+                                           for_twd_amount = $4,
+                                           remain_for_twd_amount = $5
                                        WHERE id = $3";
                 $update_result = pg_query_params($dblink, $update_history_sql, [
                     $foreign_amount,
                     $twd_amount,
                     $existing_id,
-                    $for_twd_amount
+                    $for_twd_amount,
+                    $remain_for_twd_amount
                 ]);
 
                 if (!$update_result) {
@@ -326,6 +347,7 @@ function saveAllocation($retainers) {
                                 foreign_amount,
                                 twd_amount,
                                 for_twd_amount,
+                                remain_for_twd_amount,
                                 rate,
                                 relation_id,
                                 record_date,
@@ -333,7 +355,7 @@ function saveAllocation($retainers) {
                                 initials,
                                 status
                             ) VALUES (
-                                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
+                                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
                             )";
 
             $insert_params = [
@@ -348,6 +370,7 @@ function saveAllocation($retainers) {
                 $foreign_amount,
                 $twd_amount,
                 $for_twd_amount,
+                $remain_for_twd_amount,
                 $rate,
                 $relation_id,
                 $record_date,

@@ -1,8 +1,7 @@
 <?php
 error_reporting(E_ERROR);
-
+require_once __DIR__ . "/require_auth.php";
 require_once('test_db/disb_db.php');
-session_start();
 
 // --- 處理返回網址 (Return URL) ---
 if ($_SERVER["REQUEST_METHOD"] == "POST" && !empty($_POST['return_url'])) {

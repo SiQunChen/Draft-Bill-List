@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . "/require_auth.php";
 require_once('test_db/draft_bill_list_edit_db.php');
 
 $deb_num = $_GET['deb_num'] ?? '';

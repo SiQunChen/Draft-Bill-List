@@ -76,11 +76,14 @@
 
 <body data-spy="scroll" data-target=".amanda-nav">
     <?php
+    require_once __DIR__ . "/require_auth.php";
     require_once("menu.php");
     ?>
 
     <!-- 側邊搜尋內容 -->
     <?php
+    $return_path = '/draft_bill_list.php?' . $_SERVER['QUERY_STRING'];
+    $return_url  = urlencode($return_path);
     require_once("draft_bill_list_search.php");
     ?>
     <!-- 側邊搜尋內容結束-->
@@ -112,7 +115,6 @@
                     $initial = $_SESSION['initial'] ?? '';
                     $has_permission = checkPrivacy($initial, 'Draft_bill_list_apply_sent');
                     $today = date('Y-m-d');
-                    $return_url = urlencode('draft_bill_list.php?' . $_SERVER['QUERY_STRING']);
 
                     if ($_SERVER["REQUEST_METHOD"] == "GET" && isset($_GET['case_number'])) {
                         // 顯示查詢條件
@@ -469,18 +471,18 @@
                                         <td class='text-left'>{$row['draft_created']}</td>
                                         <td class='text-left'>{$row['case_num']}</td>
                                         <td class='text-left'>{$row['case_manager']}</td>
-                                        <td class='text-left'><a href='http://slashlaw-new/draft_bill_list_bill_mod.php?id={$row['id']}&deb_num={$deb_num}&return_url={$return_url}'>{$deb_num}</a>{$pppoc_html}</td>
+                                        <td class='text-left'><a href='draft_bill_list_bill_mod.php?id={$row['id']}&deb_num={$deb_num}&return_url={$return_url}'>{$deb_num}</a>{$pppoc_html}</td>
                                         <td class='text-right'>{$display_legal}</td>
                                         <td class='text-right'>{$display_disbs}</td>
                                         <td class='text-right'>{$display_total}</td>
                                         <td class='text-left'>
-                                            <a href='http://slashlaw-new/draft_bill_list_edit.php?deb_num={$deb_num}&return_url={$return_url}' 
+                                            <a href='draft_bill_list_edit.php?deb_num={$deb_num}&return_url={$return_url}'
                                             class='btn btn-sm btn-primary' 
                                             style='margin-bottom: 5px;'>
                                             <i class='glyphicon glyphicon-edit'></i> Edit
                                             </a>
                                             <br>
-                                            <a href='http://slashlaw-new/disb_insert.php?deb_num={$deb_num}&return_url={$return_url}' 
+                                            <a href='disb_insert.php?deb_num={$deb_num}&return_url={$return_url}'
                                             class='btn btn-sm btn-success'>
                                             <i class='glyphicon glyphicon-plus'></i> Add Disbs
                                             </a>

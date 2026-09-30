@@ -1,5 +1,5 @@
 <?php
-require_once("db23.ini");
+require_once(__DIR__ . '/../db23.php');
 
 function getBillData($deb_num) {
     $dblink = @pg_connect(DB_CONNECT23);

@@ -6,7 +6,7 @@ error_reporting(E_ALL);
 // 回傳 JSON 格式
 header('Content-Type: application/json; charset=utf-8');
 
-require_once("db23.ini");
+require_once(__DIR__ . '/../db23.php');
 require_once("draft_bill_list_db.php"); // 引入 getData() 函數
 
 // PHPMailer 引入

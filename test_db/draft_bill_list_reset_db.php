@@ -5,7 +5,7 @@ ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
 // 2. 引入資料庫設定
-require_once("db23.ini");
+require_once(__DIR__ . '/../db23.php');
 
 // 3. 建立資料庫連接
 $dblink = @pg_connect(DB_CONNECT23);

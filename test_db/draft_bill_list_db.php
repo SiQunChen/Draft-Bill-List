@@ -2,7 +2,7 @@
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
-require_once("db23.ini");
+require_once(__DIR__ . '/../db23.php');
 
 function getData($case_number, $match_or_like, $case_manager, $sort_key = 'case_num', $sort_order = 'ASC', $target_ids = []) {
     // 1. 資料庫連接
